@@ -5,6 +5,7 @@ def test_web_pages_render(client):
     assert user.status_code == 200
     user_html = user.get_data(as_text=True)
     assert "오늘 일정" in user_html
+    assert "assistant-icon" not in user_html
     assert "나의 하루 동반자" not in user_html
     assert "카메라 없이 생활 신호만 확인합니다." not in user_html
     assert caregiver.status_code == 200
@@ -101,6 +102,14 @@ def test_user_script_periodically_refreshes_without_http_cache(client):
     assert "}, 2000);" in script
 
 
+def test_kiosk_enables_mouse_drag_scrolling_for_touch_areas(client):
+    script = client.get("/static/app.js").get_data(as_text=True)
+
+    assert '$$(".task-list, .conversation").forEach(setupMouseDragScrolling)' in script
+    assert 'event.pointerType !== "mouse"' in script
+    assert "element.scrollTop = startScrollTop - distance" in script
+
+
 def test_pi_kiosk_uses_local_usb_microphone_endpoint(client):
     user_page = client.get("/").get_data(as_text=True)
     script = client.get("/static/app.js").get_data(as_text=True)
@@ -109,6 +118,14 @@ def test_pi_kiosk_uses_local_usb_microphone_endpoint(client):
     assert "recordLocalVoice" in script
     assert 'api("/voice/listen", { method: "POST"' in script
     assert '$("#assistantForm").requestSubmit()' in script
+
+
+def test_compact_loopback_display_uses_local_tts_and_ignores_normal_cancel_events(client):
+    script = client.get("/static/app.js").get_data(as_text=True)
+
+    assert '["127.0.0.1", "localhost"].includes(window.location.hostname)' in script
+    assert 'window.matchMedia("(min-width: 821px) and (max-height: 720px)").matches' in script
+    assert '["canceled", "interrupted"].includes(event.error)' in script
 
 
 def test_same_wifi_demo_console_and_caregiver_alert_ui(app, client):
@@ -146,6 +163,23 @@ def test_feedback_passes_recent_conversation_to_model(client, monkeypatch):
         {"role": "user", "content": "보리차를 마셨어요."},
         {"role": "assistant", "content": "기억했어요."},
     ]
+
+
+def test_feedback_history_returns_latest_five_exchanges(client, monkeypatch):
+    monkeypatch.setattr("piuda.api.ollama_feedback", lambda message, context, history: f"답변 {message}")
+    for number in range(1, 7):
+        response = client.post("/api/v1/feedback", json={"message": f"질문 {number}"})
+        assert response.status_code == 200
+
+    history = client.get("/api/v1/feedback/history")
+
+    assert history.status_code == 200
+    items = history.get_json()["items"]
+    assert len(items) == 10
+    assert items[0]["role"] == "user"
+    assert items[0]["content"] == "질문 2"
+    assert items[-1]["role"] == "assistant"
+    assert items[-1]["content"] == "답변 질문 6"
 
 
 def test_local_tts_only_accepts_loopback(client, monkeypatch):

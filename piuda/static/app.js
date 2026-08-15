@@ -4,7 +4,10 @@ const state = {
   token: localStorage.getItem("piudaCaregiverToken") || "",
   setupRequired: false,
   demoMode: false,
-  kiosk: new URLSearchParams(window.location.search).get("kiosk") === "1",
+  kiosk: new URLSearchParams(window.location.search).get("kiosk") === "1" || (
+    ["127.0.0.1", "localhost"].includes(window.location.hostname)
+    && window.matchMedia("(min-width: 821px) and (max-height: 720px)").matches
+  ),
   autoSpeak: localStorage.getItem("piudaAutoSpeak") !== "false",
   lastReply: "",
   userRefreshing: false,
@@ -14,6 +17,10 @@ const state = {
   lastAlertId: null,
   alertAudioContext: null,
   userName: "사용자",
+  conversation: [],
+  userTaskSnapshot: null,
+  taskUndoUntil: new Map(),
+  taskRemovalTimers: new Map(),
   wellnessActivation: "",
   wellnessTimer: null
 };
@@ -115,7 +122,7 @@ async function initUser() {
   tick();
   setInterval(tick, 30000);
 
-  await refreshUserSnapshot(true);
+  await Promise.all([refreshUserSnapshot(true), refreshConversationHistory()]);
   setInterval(() => {
     if (!document.hidden) refreshUserSnapshot();
   }, 2000);
@@ -125,13 +132,23 @@ async function initUser() {
   });
 
   $("#taskList").addEventListener("click", async event => {
-    const button = event.target.closest("[data-complete-task]");
+    const button = event.target.closest("[data-complete-task], [data-undo-task]");
     if (!button) return;
     button.disabled = true;
+    const taskId = button.dataset.completeTask || button.dataset.undoTask;
     try {
-      const result = await api(`/tasks/${button.dataset.completeTask}/complete`, { method: "POST", body: {} });
-      toast("완료로 기록했어요.");
-      speak("완료로 기록했어요.");
+      if (button.dataset.undoTask) {
+        await api(`/tasks/${taskId}/undo`, { method: "POST", body: {} });
+        clearTaskRemoval(taskId);
+        toast("완료를 되돌렸어요.");
+        speak("완료를 되돌렸어요.");
+      } else {
+        await api(`/tasks/${taskId}/complete`, { method: "POST", body: {} });
+        state.taskUndoUntil.set(String(taskId), Date.now() + 5000);
+        scheduleTaskRemoval(taskId);
+        toast("완료로 기록했어요. 5초 동안 되돌릴 수 있어요.");
+        speak("완료로 기록했어요.");
+      }
       await refreshUserSnapshot();
     } catch (error) {
       toast(error.message);
@@ -150,6 +167,90 @@ async function initUser() {
   $$('[data-wellness-response]').forEach(button => button.addEventListener("click", () => respondWellness(button.dataset.wellnessResponse)));
   updateTtsControls();
   setupVoiceInput();
+  if (state.kiosk) {
+    document.addEventListener("dragstart", event => event.preventDefault());
+    $$(".task-list, .conversation").forEach(setupMouseDragScrolling);
+  }
+}
+
+function setupMouseDragScrolling(element) {
+  let pointerId = null;
+  let startY = 0;
+  let startScrollTop = 0;
+  let moved = false;
+
+  element.addEventListener("pointerdown", event => {
+    if (event.pointerType !== "mouse" || event.button !== 0 || event.target.closest("button, input, textarea, a")) return;
+    pointerId = event.pointerId;
+    startY = event.clientY;
+    startScrollTop = element.scrollTop;
+    moved = false;
+    element.setPointerCapture(pointerId);
+    element.classList.add("drag-scrolling");
+  });
+  element.addEventListener("pointermove", event => {
+    if (event.pointerId !== pointerId) return;
+    const distance = event.clientY - startY;
+    if (Math.abs(distance) > 4) moved = true;
+    if (!moved) return;
+    element.scrollTop = startScrollTop - distance;
+    event.preventDefault();
+  });
+  const finish = event => {
+    if (event.pointerId !== pointerId) return;
+    if (element.hasPointerCapture(pointerId)) element.releasePointerCapture(pointerId);
+    pointerId = null;
+    element.classList.remove("drag-scrolling");
+  };
+  element.addEventListener("pointerup", finish);
+  element.addEventListener("pointercancel", finish);
+  element.addEventListener("click", event => {
+    if (!moved) return;
+    event.preventDefault();
+    event.stopPropagation();
+    moved = false;
+  }, true);
+}
+
+function scrollConversationToBottom() {
+  const conversation = $(".conversation");
+  if (!conversation) return;
+  window.requestAnimationFrame(() => {
+    conversation.scrollTop = conversation.scrollHeight;
+  });
+}
+
+function renderConversation() {
+  const conversation = $("#assistantConversation");
+  if (!conversation) return;
+  if (!state.conversation.length) {
+    conversation.innerHTML = '<div class="chat-bubble assistant-bubble welcome-bubble"><span>피우다</span><p>오늘 할 일이나 상태를 물어보세요.</p></div>';
+  } else {
+    conversation.innerHTML = state.conversation.map(item => item.role === "user"
+      ? `<p class="chat-bubble user-bubble">${escapeHTML(item.content)}</p>`
+      : `<div class="chat-bubble assistant-bubble"><span>피우다</span><p>${escapeHTML(item.content)}</p></div>`
+    ).join("");
+  }
+  const lastAssistant = [...state.conversation].reverse().find(item => item.role === "assistant" && !item.pending);
+  state.lastReply = lastAssistant?.content || "";
+  $("#replayButton")?.classList.toggle("hidden", !state.lastReply);
+  scrollConversationToBottom();
+}
+
+async function refreshConversationHistory() {
+  try {
+    const result = await api("/feedback/history");
+    state.conversation = (result.items || []).slice(-10);
+  } catch {
+    state.conversation = [];
+  }
+  renderConversation();
+}
+
+function addConversationMessage(role, content, pending = false) {
+  state.conversation.push({ role, content, pending });
+  state.conversation = state.conversation.slice(-10);
+  renderConversation();
 }
 
 async function refreshUserSnapshot(showError = false) {
@@ -172,14 +273,24 @@ async function refreshUserSnapshot(showError = false) {
 }
 
 function renderUserTasks(result) {
+  state.userTaskSnapshot = result;
   $("#taskSummary").textContent = `${result.summary.completed} / ${result.summary.total} 완료`;
   const progress = result.summary.total ? result.summary.completed / result.summary.total * 100 : 0;
   $("#taskProgress").style.width = `${progress}%`;
+  const currentTime = Date.now();
+  const visibleItems = result.items.filter(item => {
+    if (item.status !== "completed") return true;
+    return (state.taskUndoUntil.get(String(item.id)) || 0) > currentTime;
+  });
   if (!result.items.length) {
     $("#taskList").innerHTML = '<div class="empty-state">오늘 등록된 일정이 없어요.</div>';
     return;
   }
-  $("#taskList").innerHTML = result.items.map(item => {
+  if (!visibleItems.length) {
+    $("#taskList").innerHTML = '<div class="empty-state task-complete-state">오늘 할 일을 모두 마쳤어요.</div>';
+    return;
+  }
+  $("#taskList").innerHTML = visibleItems.map(item => {
     const complete = item.status === "completed";
     const missed = item.status === "missed";
     const icons = { meal: "식", medication: "약", cleaning: "집", sleep: "잠", outing: "밖", hospital: "병", other: "걷" };
@@ -187,9 +298,26 @@ function renderUserTasks(result) {
       <div class="task-icon" aria-hidden="true">${complete ? "✓" : icons[item.category] || "•"}</div>
       <div class="task-time">${escapeHTML(item.scheduled_time)}</div>
       <div><h3>${escapeHTML(item.title)}</h3><p>${escapeHTML(item.instructions || (missed ? "예정 시간이 지났어요. 지금 완료할 수 있어요." : "완료하면 버튼을 눌러 주세요."))}</p></div>
-      ${complete ? '<span class="pill">✓ 완료</span>' : `<button class="button ${missed ? "secondary" : "primary"}" data-complete-task="${item.id}">완료했어요</button>`}
+      ${complete ? `<button class="button undo-button" data-undo-task="${item.id}">✓ 완료 · 되돌리기</button>` : `<button class="button ${missed ? "secondary" : "primary"}" data-complete-task="${item.id}">완료했어요</button>`}
     </article>`;
   }).join("");
+}
+
+function clearTaskRemoval(taskId) {
+  const key = String(taskId);
+  window.clearTimeout(state.taskRemovalTimers.get(key));
+  state.taskRemovalTimers.delete(key);
+  state.taskUndoUntil.delete(key);
+}
+
+function scheduleTaskRemoval(taskId) {
+  const key = String(taskId);
+  window.clearTimeout(state.taskRemovalTimers.get(key));
+  state.taskRemovalTimers.set(key, window.setTimeout(() => {
+    state.taskRemovalTimers.delete(key);
+    state.taskUndoUntil.delete(key);
+    if (state.userTaskSnapshot) renderUserTasks(state.userTaskSnapshot);
+  }, 5000));
 }
 
 function renderUserRisk(risk) {
@@ -279,20 +407,19 @@ async function askAssistant(event) {
   const message = input.value.trim();
   if (!message) return;
   const submit = event.currentTarget.querySelector('[type="submit"]');
-  const question = $("#assistantQuestion");
-  question.textContent = message;
-  question.classList.remove("hidden");
+  addConversationMessage("user", message);
+  addConversationMessage("assistant", "답변을 준비하고 있어요…", true);
   submit.disabled = true;
-  $("#assistantReply").textContent = "답변을 준비하고 있어요…";
   try {
     const result = await api("/feedback", { method: "POST", body: { message } });
-    $("#assistantReply").textContent = result.reply;
+    state.conversation[state.conversation.length - 1] = { role: "assistant", content: result.reply };
+    renderConversation();
     state.lastReply = result.reply;
-    $("#replayButton").classList.remove("hidden");
     input.value = "";
     if (result.speak) speak(result.reply);
   } catch (error) {
-    $("#assistantReply").textContent = "지금은 답하기 어렵습니다. 잠시 후 다시 말씀해 주세요.";
+    state.conversation[state.conversation.length - 1] = { role: "assistant", content: "지금은 답하기 어렵습니다. 잠시 후 다시 말씀해 주세요." };
+    renderConversation();
     toast(error.message);
   } finally {
     submit.disabled = false;
@@ -335,7 +462,10 @@ async function speak(text, force = false) {
   utterance.pitch = 1;
   const voices = window.speechSynthesis.getVoices();
   utterance.voice = voices.find(voice => voice.lang?.toLowerCase().startsWith("ko")) || null;
-  utterance.onerror = () => toast("음성 안내를 재생하지 못했습니다.");
+  utterance.onerror = event => {
+    if (["canceled", "interrupted"].includes(event.error)) return;
+    toast("음성 안내를 재생하지 못했습니다.");
+  };
   window.setTimeout(() => {
     window.speechSynthesis.speak(utterance);
     window.speechSynthesis.resume();

@@ -17,6 +17,17 @@ def test_create_materialize_and_complete_missed_task(client, auth_headers):
     assert today["summary"]["completed"] == 1
     assert today["items"][0]["note"] == "복용 확인"
 
+    undone = client.post(f"/api/v1/tasks/{task_id}/undo", json={})
+    assert undone.status_code == 200
+    today = client.get("/api/v1/tasks/today").get_json()
+    assert today["summary"]["completed"] == 0
+    assert today["items"][0]["status"] == "missed"
+    assert today["items"][0]["completed_at"] is None
+    assert today["items"][0]["note"] is None
+
+    repeated = client.post(f"/api/v1/tasks/{task_id}/undo", json={})
+    assert repeated.status_code == 409
+
 
 def test_invalid_time_is_rejected(client, auth_headers):
     response = client.post(

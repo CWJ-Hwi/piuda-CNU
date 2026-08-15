@@ -417,6 +417,23 @@ def complete_task(task_id: int):
     return jsonify({"ok": True, "risk": risk})
 
 
+@api.post("/tasks/<int:task_id>/undo")
+def undo_complete_task(task_id: int):
+    optional_payload()
+    cursor = get_db().execute(
+        """
+        UPDATE task_occurrences SET status='pending', completed_at=NULL, note=NULL
+        WHERE id=? AND status='completed'
+        """,
+        (task_id,),
+    )
+    get_db().commit()
+    if cursor.rowcount == 0:
+        return jsonify({"error": "not_found_or_not_completed"}), 409
+    risk = evaluate_and_notify()
+    return jsonify({"ok": True, "risk": risk})
+
+
 @api.get("/risk/current")
 def current_risk():
     return jsonify(evaluate_and_notify())
@@ -666,6 +683,14 @@ def sensor_event():
     database.commit()
     risk = evaluate_and_notify()
     return jsonify({"accepted": True, "duplicate": cursor.rowcount == 0, "risk": risk}), 202
+
+
+@api.get("/feedback/history")
+def feedback_history():
+    rows = get_db().execute(
+        "SELECT role, content, created_at FROM feedback_messages ORDER BY id DESC LIMIT 10"
+    ).fetchall()
+    return jsonify({"items": [dict(row) for row in reversed(rows)]})
 
 
 @api.post("/feedback")
