@@ -1,7 +1,7 @@
 from flask import Blueprint, abort, current_app, make_response, render_template, send_from_directory
 
 from .auth import is_private_request
-from .demo import DEMO_GROUPS, scenario_catalog
+from .demo import scenario_catalog
 
 
 web = Blueprint("web", __name__)
@@ -39,12 +39,7 @@ def demo_console():
         abort(404)
     if not is_private_request():
         abort(403)
-    scenarios = scenario_catalog()
-    groups = [
-        {"key": key, "title": title, "items": [item for item in scenarios if item["group"] == key]}
-        for key, title in DEMO_GROUPS
-    ]
-    return render_template("demo.html", groups=groups)
+    return render_template("demo.html", scenarios=scenario_catalog())
 
 
 @web.get("/manifest.webmanifest")

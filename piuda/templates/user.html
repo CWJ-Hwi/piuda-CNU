@@ -11,7 +11,7 @@
   <title>피우다 · 오늘의 생활</title>
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/icon-180.png">
-  <link rel="stylesheet" href="/static/app.css?v=29">
+  <link rel="stylesheet" href="/static/app.css?v=30">
 </head>
 <body data-page="user">
   <header class="topbar shell">
@@ -63,22 +63,19 @@
     </section>
   </main>
 
-  <dialog id="wellnessDialog" class="wellness-dialog" aria-labelledby="wellnessTitle">
+  <dialog id="userDangerDialog" class="wellness-dialog user-danger-dialog" aria-labelledby="userDangerTitle">
     <div class="wellness-content">
-      <div class="wellness-icon" aria-hidden="true">?</div>
-      <p class="eyebrow">상태 확인</p>
-      <h2 id="wellnessTitle">지금 문제가 있나요?</h2>
-      <p>잠깐 쉬고 계신 것이면 괜찮아요.<br>현재 상태를 알려 주세요.</p>
-      <p class="wellness-countdown" id="wellnessCountdown">30초 동안 응답을 기다릴게요.</p>
-      <div class="wellness-actions">
-        <button class="button wellness-ok" type="button" data-wellness-response="ok">괜찮아요</button>
-        <button class="button alert-demo" type="button" data-wellness-response="help">도움이 필요해요</button>
-      </div>
+      <div class="wellness-icon" aria-hidden="true">!</div>
+      <p class="eyebrow">위험 상태</p>
+      <h2 id="userDangerTitle">장시간 생활 신호가 없어요</h2>
+      <p>보호자에게 위험 알림을 보냈습니다.<br>안전한 곳에서 잠시 기다려 주세요.</p>
+      <p class="wellness-countdown">PIR·Wi-Fi CSI 생활 신호가 4시간 동안 확인되지 않았습니다.</p>
+      <div class="wellness-actions single"><button id="userDangerAcknowledge" class="button alert-demo" type="button">확인했습니다</button></div>
     </div>
   </dialog>
 
   <footer class="shell footer"><div class="footer-links"><a href="/caregiver">보호자 화면</a><a href="/install">아이폰 설치</a></div></footer>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="/static/app.js?v=29" defer></script>
+  <script src="/static/app.js?v=30" defer></script>
 </body>
 </html>

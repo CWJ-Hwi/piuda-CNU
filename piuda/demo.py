@@ -10,25 +10,28 @@ from .db import get_db
 from .risk import level_for_score
 
 
-DEMO_GROUPS = (
-    ("daily", "일정"),
-    ("check", "상태 확인"),
-    ("response", "보호자 대응"),
-)
-
 DEMO_SCENARIOS = (
-    {"key": "normal", "group": "daily", "icon": "01", "title": "기본 상태", "summary": "오늘 일정과 최근 움직임이 등록된 초기 장면입니다.", "expected": "건강 점수 100 · 보호자 알림 없음"},
-    {"key": "medication_reminder", "group": "daily", "icon": "02", "title": "약 먹을 시간", "summary": "복약 일정을 사용자 화면에 먼저 표시합니다.", "expected": "복약 일정 강조 · 보호자 알림 없음"},
-    {"key": "medication_done", "group": "daily", "icon": "03", "title": "복약 완료", "summary": "사용자가 완료를 누르면 복약 일정이 완료됩니다.", "expected": "복약 완료 · 건강 점수 100"},
-    {"key": "all_completed", "group": "daily", "icon": "04", "title": "오늘 일정 모두 완료", "summary": "오늘 일정을 모두 완료한 상태입니다.", "expected": "5/5 완료 · 건강 점수 100"},
-    {"key": "inactivity_check", "group": "check", "icon": "05", "title": "낮 시간 3시간 무활동", "summary": "낮 시간 3시간 동안 움직임이 없어 사용자 상태를 먼저 확인합니다.", "expected": "사용자 확인 팝업 · 보호자 알림은 아직 없음"},
-    {"key": "inactivity_ok", "group": "check", "icon": "06", "title": "‘괜찮아요’ 응답", "summary": "사용자가 응답하면 보호자 알림 없이 확인을 종료합니다.", "expected": "팝업 종료 · 건강 점수 100"},
-    {"key": "inactivity_no_response", "group": "check", "icon": "07", "title": "확인에 응답 없음", "summary": "30초 동안 응답이 없으면 보호자 확인 알림을 보냅니다.", "expected": "건강 점수 30 · 보호자 확인 알림"},
-    {"key": "sensor_offline", "group": "check", "icon": "08", "title": "센서 연결 끊김", "summary": "센서 신호가 30분 동안 없으면 보호자에게 점검 알림을 보냅니다.", "expected": "사용자 일상 화면 유지 · 보호자 점검 알림"},
-    {"key": "fall", "group": "response", "icon": "09", "title": "넘어짐 의심", "summary": "Wi-Fi CSI의 넘어짐 의심 신호를 사용자와 보호자 화면에 표시합니다.", "expected": "건강 점수 50 · 보호자 즉시 확인"},
-    {"key": "emergency", "group": "response", "icon": "10", "title": "복합 긴급 상황", "summary": "일정 미수행·장시간 무활동·넘어짐 신호가 함께 감지됩니다.", "expected": "건강 점수 0 · 긴급 확인"},
-    {"key": "recovered", "group": "response", "icon": "11", "title": "활동 재확인", "summary": "움직임이 다시 감지되면 건강 점수가 100으로 돌아갑니다.", "expected": "건강 점수 100 · 회복 안내"},
-    {"key": "caregiver_alert", "group": "response", "icon": "12", "title": "보호자 알림 요청", "summary": "사용자가 버튼을 눌러 보호자에게 직접 확인 알림을 보냅니다.", "expected": "보호자 화면에 확인 팝업 · 소리·진동 알림"},
+    {
+        "key": "normal",
+        "icon": "01",
+        "title": "기본 상태",
+        "summary": "오늘 일정과 최근 생활 신호가 정상적으로 확인된 상태입니다.",
+        "expected": "100점 · 안심 · 팝업 없음",
+    },
+    {
+        "key": "meal_delay",
+        "icon": "02",
+        "title": "식사 지연",
+        "summary": "점심 식사 시간이 지났고 이후 활동도 확인되지 않은 상태입니다.",
+        "expected": "60점 · 주의 · 점심 식사 미수행 표시",
+    },
+    {
+        "key": "long_absence",
+        "icon": "03",
+        "title": "장시간 비움",
+        "summary": "PIR과 Wi-Fi CSI 생활 신호가 장시간 확인되지 않은 상태입니다.",
+        "expected": "30점 · 위험 · 사용자와 보호자 양쪽 팝업",
+    },
 )
 
 
@@ -46,7 +49,7 @@ def current_demo_state() -> dict:
         return {
             "scenario_key": "normal",
             "scenario_title": "기본 상태",
-            "description": "오늘 일정과 최근 움직임이 등록된 초기 장면입니다.",
+            "description": "오늘 일정과 최근 생활 신호가 정상적으로 확인된 상태입니다.",
             "risk_score": 100,
             "risk_level": "normal",
             "factors": [],
@@ -175,86 +178,55 @@ def trigger_demo_scenario(key: str) -> dict | None:
     if key == "normal":
         return current_demo_state()
 
-    if key == "medication_reminder":
-        _set_task("아침 약 복용", "pending")
-        _activate(scenario, 100, [], "약 드실 시간이에요. 약 봉투를 확인하고 물과 함께 드세요.")
-    elif key == "medication_done":
-        _set_task("아침 약 복용", "completed")
-        _activate(scenario, 100, [], "복약 완료를 기록했어요.")
-    elif key == "all_completed":
-        get_db().execute(
-            "UPDATE task_occurrences SET status='completed', completed_at=? WHERE due_date=?",
-            (iso(), now().date().isoformat()),
-        )
-        _activate(scenario, 100, [], "오늘 일정을 모두 완료했어요.")
-    elif key == "inactivity_check":
-        _clear_sensor_events()
-        _sensor_event("pir_motion", 190, 0.98)
-        factors = [{"code": "long_pir_inactivity", "label": "낮 시간 장시간 움직임 없음", "points": 30, "evidence": "마지막 움직임 3시간 10분 전"}]
-        _activate(scenario, 70, factors, "잠깐 쉬고 계신가요? 화면에서 현재 상태를 알려 주세요.")
-    elif key == "inactivity_ok":
-        _clear_sensor_events()
-        _sensor_event("pir_motion", 0, 0.99)
-        _activate(scenario, 100, [], "‘괜찮아요’ 응답을 확인했어요.")
-    elif key == "inactivity_no_response":
-        _clear_sensor_events()
-        _sensor_event("pir_motion", 210, 0.98)
-        factors = [
-            {"code": "long_pir_inactivity", "label": "장시간 움직임 없음", "points": 30, "evidence": "마지막 움직임 3시간 30분 전"},
-            {"code": "missed_and_inactive", "label": "사용자 확인에 응답 없음", "points": 40, "evidence": "30초 확인 팝업 미응답"},
-        ]
-        _activate(
-            scenario, 30, factors, "보호자에게 확인을 요청했어요. 안전한 곳에서 잠시 기다려 주세요.",
-            ("danger", "사용자 확인이 필요합니다", "낮 시간 3시간 30분 무활동 후 화면 확인에도 응답이 없습니다."),
-        )
-    elif key == "sensor_offline":
-        _clear_sensor_events()
-        _sensor_event("heartbeat", 30, 1.0)
-        get_db().execute(
-            "UPDATE sensor_devices SET last_seen_at=? WHERE id=?",
-            (iso(now() - timedelta(minutes=30)), _sensor_id()),
-        )
-        factors = [{"code": "sensor_offline", "label": "거실 센서 연결 끊김", "points": 25, "evidence": "마지막 신호 30분 전"}]
-        _activate(
-            scenario, 75, factors, "오늘 일정은 계속 확인할 수 있어요.",
-            ("caution", "거실 센서 점검이 필요합니다", "센서 상태 신호가 30분 동안 수신되지 않았습니다."),
-        )
-    elif key == "fall":
-        _sensor_event("csi_fall", 2, 0.91)
-        factors = [{"code": "csi_fall", "label": "Wi-Fi CSI 넘어짐 의심", "points": 50, "evidence": "신뢰도 91%"}]
-        _activate(
-            scenario, 50, factors, "혹시 넘어지셨나요? 움직이기 힘들면 그대로 계세요. 보호자에게 알렸어요.",
-            ("danger", "넘어짐 의심 신호가 감지되었습니다", "Wi-Fi CSI 신뢰도 91% · 즉시 확인해 주세요."),
-        )
-    elif key == "emergency":
-        _set_task("아침 약 복용", "missed")
+    if key == "meal_delay":
         _set_task("점심 식사", "missed")
-        _clear_sensor_events()
-        _sensor_event("pir_motion", 240, 0.98)
-        _sensor_event("csi_fall", 3, 0.94)
         factors = [
-            {"code": "medication_missed", "label": "복약 일정 미수행", "points": 20, "evidence": "09:00 아침 약"},
-            {"code": "meal_missed", "label": "식사 일정 미수행", "points": 15, "evidence": "12:30 점심 식사"},
-            {"code": "long_pir_inactivity", "label": "장시간 움직임 없음", "points": 30, "evidence": "마지막 움직임 4시간 전"},
-            {"code": "csi_fall", "label": "넘어짐 의심", "points": 50, "evidence": "신뢰도 94%"},
+            {
+                "code": "meal_missed",
+                "label": "점심 식사 지연",
+                "points": 15,
+                "evidence": "12:30 점심 식사 미수행",
+            },
+            {
+                "code": "scheduled_inactivity",
+                "label": "식사 시간 이후 활동 미감지",
+                "points": 25,
+                "evidence": "식사 예정 시간 이후 생활 신호 없음",
+            },
         ]
-        _activate(
-            scenario, 0, factors, "움직이지 말고 안전한 곳에서 보호자를 기다려 주세요.",
-            ("emergency", "즉시 확인이 필요합니다", "일정 미수행·장시간 무활동·넘어짐 신호가 함께 감지되었습니다."),
-        )
-    elif key == "recovered":
-        _sensor_event("pir_motion", 0, 0.99)
-        _activate(
-            scenario, 100, [], "움직임이 다시 확인됐어요. 현재 건강 점수는 100점이에요.",
-            ("info", "활동이 다시 확인되었습니다", "거실 움직임이 감지되어 안심 상태로 돌아왔습니다."),
-        )
-    elif key == "caregiver_alert":
         _activate(
             scenario,
-            100,
-            [],
-            "보호자에게 확인 알림을 보냈어요.",
-            ("danger", "사용자 확인 요청", "김피움님이 보호자의 확인을 요청했습니다."),
+            60,
+            factors,
+            "점심 식사 시간이 지났어요. 식사 여부를 확인해 주세요.",
+        )
+    elif key == "long_absence":
+        _clear_sensor_events()
+        _sensor_event("pir_motion", 240, 0.98)
+        factors = [
+            {
+                "code": "long_pir_inactivity",
+                "label": "장시간 PIR 움직임 없음",
+                "points": 30,
+                "evidence": "마지막 움직임 4시간 전",
+            },
+            {
+                "code": "extended_absence",
+                "label": "PIR·Wi-Fi CSI 생활 신호 없음",
+                "points": 40,
+                "evidence": "4시간 동안 생활 신호 미확인",
+            },
+        ]
+        _activate(
+            scenario,
+            30,
+            factors,
+            "장시간 생활 신호가 확인되지 않았어요. 보호자에게 위험 알림을 보냈습니다.",
+            (
+                "danger",
+                "장시간 비움 위험 알림",
+                "4시간 동안 PIR·Wi-Fi CSI 생활 신호가 확인되지 않았습니다. 지금 확인해 주세요.",
+            ),
         )
 
     return current_demo_state()

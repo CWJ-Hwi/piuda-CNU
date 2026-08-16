@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#102f28">
   <meta name="format-detection" content="telephone=no">
   <title>피우다 · 발표 제어실</title>
-  <link rel="stylesheet" href="/static/app.css?v=29">
+  <link rel="stylesheet" href="/static/app.css?v=30">
 </head>
 <body data-page="demo">
   <header class="topbar shell">
@@ -18,13 +18,7 @@
     <section class="demo-hero">
       <p class="eyebrow">발표 진행</p>
       <h1>발표 시나리오 제어실</h1>
-      <p>장면을 선택하면 사용자·보호자 화면이 2초 안에 갱신됩니다.</p>
-    </section>
-
-    <section class="demo-roles" aria-label="발표 역할">
-      <article><span>1</span><div><strong>트리거 담당</strong><small>이 화면에서 시나리오 선택</small></div></article>
-      <article><span>2</span><div><strong>사용자 담당</strong><small>사용자 화면 조작</small></div></article>
-      <article><span>3</span><div><strong>보호자 담당</strong><small>보호자 화면 조작</small></div></article>
+      <p>아래 세 장면을 순서대로 실행하면 사용자·보호자 화면이 2초 안에 갱신됩니다.</p>
     </section>
 
     <section class="demo-live" id="demoLive" aria-live="polite">
@@ -37,23 +31,21 @@
       <time id="demoActivatedAt">-</time>
     </section>
 
-    {% for group in groups %}
     <section class="demo-group">
-      <div class="demo-group-title"><p class="eyebrow">시나리오 묶음 {{ loop.index }}</p><h2>{{ group.title }}</h2></div>
+      <div class="demo-group-title"><p class="eyebrow">발표 순서</p><h2>세 가지 핵심 장면</h2></div>
       <div class="demo-scenario-grid">
-        {% for scenario in group["items"] %}
+        {% for scenario in scenarios %}
         <article class="demo-scenario-card" data-scenario-card="{{ scenario.key }}">
           <div class="demo-scenario-heading"><span>{{ scenario.icon }}</span><div><h3>{{ scenario.title }}</h3><p>{{ scenario.summary }}</p></div></div>
           <p class="demo-expected"><strong>예상 화면</strong>{{ scenario.expected }}</p>
-          <button class="button {% if scenario.key in ['inactivity_no_response', 'emergency', 'fall', 'caregiver_alert'] %}alert-demo{% else %}secondary{% endif %}" type="button" data-trigger-scenario="{{ scenario.key }}">이 장면 실행</button>
+          <button class="button {% if scenario.key == 'long_absence' %}alert-demo{% else %}secondary{% endif %}" type="button" data-trigger-scenario="{{ scenario.key }}">이 장면 실행</button>
         </article>
         {% endfor %}
       </div>
     </section>
-    {% endfor %}
   </main>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="/static/app.js?v=29" defer></script>
+  <script src="/static/app.js?v=30" defer></script>
 </body>
 </html>

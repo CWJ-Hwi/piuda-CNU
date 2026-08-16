@@ -30,8 +30,8 @@ SENSOR_OFFLINE_WINDOW = timedelta(minutes=30)
 
 LEVELS = {
     "normal": {"label": "안심", "min": 76, "color": "green"},
-    "caution": {"label": "살펴보기", "min": 51, "color": "amber"},
-    "danger": {"label": "주의", "min": 21, "color": "orange"},
+    "caution": {"label": "주의", "min": 51, "color": "amber"},
+    "danger": {"label": "위험", "min": 21, "color": "orange"},
     "emergency": {"label": "긴급", "min": 0, "color": "red"},
 }
 

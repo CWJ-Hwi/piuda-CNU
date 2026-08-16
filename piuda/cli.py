@@ -128,7 +128,7 @@ def reset_demo(app, preserve_auth: bool = False) -> None:
               id, scenario_key, scenario_title, description, risk_score,
               risk_level, factors_json, user_message, activated_at
             ) VALUES (
-              1, 'normal', '기본 상태', '오늘 일정과 최근 움직임이 등록된 초기 장면입니다.', 100,
+              1, 'normal', '기본 상태', '오늘 일정과 최근 생활 신호가 정상적으로 확인된 상태입니다.', 100,
               'normal', '[]', '현재 확인된 위험 신호가 없습니다.', ?
             )
             """,

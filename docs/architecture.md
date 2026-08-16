@@ -44,7 +44,7 @@ Raspberry Pi 5 · PIUDA-CNU 핫스팟(192.168.4.1) + Flask REST API
 - `GET /api/v1/risk/current`, `GET /api/v1/risk/history`
 - `POST /api/v1/sensors`, `POST /api/v1/sensor-events`, `POST /api/v1/module-readings`
 - `GET /api/v1/dashboard`, `GET /api/v1/alerts`
-- `POST /api/v1/wellness-check`
+- `GET|POST /api/v1/demo/scenarios`, `POST /api/v1/demo/scenarios/{key}`
 - `POST /api/v1/caregiver-alert`
 - `POST /api/v1/feedback`
 

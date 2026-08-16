@@ -22,8 +22,7 @@ const state = {
   userTaskSnapshot: null,
   taskUndoUntil: new Map(),
   taskRemovalTimers: new Map(),
-  wellnessActivation: "",
-  wellnessTimer: null
+  userDangerActivation: ""
 };
 let installPromptEvent = null;
 const $ = selector => document.querySelector(selector);
@@ -165,7 +164,7 @@ async function initUser() {
   $("#ttsToggle").addEventListener("click", toggleTts);
   $("#replayButton").addEventListener("click", () => speak(state.lastReply, true));
   $("#caregiverAlertButton").addEventListener("click", sendCaregiverAlert);
-  $$('[data-wellness-response]').forEach(button => button.addEventListener("click", () => respondWellness(button.dataset.wellnessResponse)));
+  $("#userDangerAcknowledge").addEventListener("click", () => $("#userDangerDialog").close());
   updateTtsControls();
   setupVoiceInput();
   if (state.kiosk) {
@@ -327,56 +326,21 @@ function renderUserRisk(risk) {
   $("#riskLabel").textContent = risk.level_label;
   $("#riskScore").textContent = risk.score;
   $("#riskMessage").textContent = risk.user_message || riskSentence(risk);
-  syncWellnessPrompt(risk);
+  syncUserDangerPrompt(risk);
 }
 
-function syncWellnessPrompt(risk) {
-  const dialog = $("#wellnessDialog");
+function syncUserDangerPrompt(risk) {
+  const dialog = $("#userDangerDialog");
   if (!dialog) return;
-  if (risk.scenario_key !== "inactivity_check") {
-    clearInterval(state.wellnessTimer);
-    state.wellnessTimer = null;
-    state.wellnessActivation = "";
+  if (risk.scenario_key !== "long_absence") {
+    state.userDangerActivation = "";
     if (dialog.open) dialog.close();
     return;
   }
-  if (state.wellnessActivation === risk.assessed_at) return;
-  state.wellnessActivation = risk.assessed_at;
+  if (state.userDangerActivation === risk.assessed_at) return;
+  state.userDangerActivation = risk.assessed_at;
   if (!dialog.open) dialog.showModal();
-  speak("지금 문제가 있나요? 괜찮으시면 괜찮아요 버튼을 눌러 주세요.");
-  const started = new Date(risk.assessed_at).valueOf();
-  clearInterval(state.wellnessTimer);
-  const update = () => {
-    const seconds = Math.max(0, 30 - Math.floor((Date.now() - started) / 1000));
-    $("#wellnessCountdown").textContent = seconds
-      ? `${seconds}초 동안 응답을 기다릴게요.`
-      : "보호자에게 확인을 요청하고 있어요.";
-    if (!seconds) respondWellness("timeout");
-  };
-  update();
-  state.wellnessTimer = setInterval(update, 1000);
-}
-
-async function respondWellness(answer) {
-  if (!state.wellnessActivation) return;
-  state.wellnessActivation = "";
-  clearInterval(state.wellnessTimer);
-  state.wellnessTimer = null;
-  $$('[data-wellness-response]').forEach(button => { button.disabled = true; });
-  try {
-    await api("/wellness-check", { method: "POST", body: { answer } });
-    $("#wellnessDialog").close();
-    const message = answer === "ok"
-      ? "‘괜찮아요’ 응답을 기록했어요."
-      : "보호자에게 확인을 요청했어요.";
-    toast(message);
-    speak(message);
-    await refreshUserSnapshot();
-  } catch (error) {
-    toast(error.message);
-  } finally {
-    $$('[data-wellness-response]').forEach(button => { button.disabled = false; });
-  }
+  speak("위험 상태입니다. 장시간 생활 신호가 없어 보호자에게 알림을 보냈습니다.");
 }
 
 async function sendCaregiverAlert() {
@@ -685,13 +649,18 @@ function playAlertTone() {
 }
 
 function notifyNewCaregiverAlert(alerts) {
+  const dialog = $("#localAlertDialog");
+  const activeAlertId = dialog.dataset.alertId;
+  if (dialog.open && activeAlertId && !alerts.some(item => String(item.id) === activeAlertId && !item.acknowledged_at)) {
+    dialog.close();
+    delete dialog.dataset.alertId;
+  }
   const newestId = alerts.reduce((maximum, item) => Math.max(maximum, Number(item.id) || 0), 0);
   const fresh = alerts
     .filter(item => !item.acknowledged_at && (state.lastAlertId === null || Number(item.id) > state.lastAlertId))
     .sort((left, right) => Number(right.id) - Number(left.id))[0];
   state.lastAlertId = Math.max(state.lastAlertId ?? 0, newestId);
   if (!fresh) return;
-  const dialog = $("#localAlertDialog");
   dialog.dataset.alertId = fresh.id;
   dialog.className = `local-alert-dialog level-${fresh.level}`;
   $("#localAlertTitle").textContent = fresh.title;
@@ -917,7 +886,7 @@ async function loadDemoStatus(showError = false) {
 
 function renderDemoStatus(result) {
   const active = result.active;
-  const labels = { normal: "안심", caution: "살펴보기", danger: "주의", emergency: "긴급" };
+  const labels = { normal: "안심", caution: "주의", danger: "위험", emergency: "긴급" };
   $("#demoActiveTitle").textContent = active.scenario_title;
   $("#demoActiveDescription").textContent = active.description;
   $("#demoRiskMetric").textContent = `${active.risk_score}점 · ${labels[active.risk_level] || active.risk_level}`;

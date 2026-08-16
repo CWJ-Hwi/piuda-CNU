@@ -169,21 +169,6 @@ def caregiver_alert():
     return jsonify({"ok": True, "created": created, "alert": alert}), 201 if created else 200
 
 
-@api.post("/wellness-check")
-def wellness_check():
-    denied = _demo_access_error()
-    if denied:
-        return denied
-    answer = str(payload().get("answer", ""))
-    if answer == "ok":
-        trigger_demo_scenario("inactivity_ok")
-    elif answer in {"help", "timeout"}:
-        trigger_demo_scenario("inactivity_no_response")
-    else:
-        raise ValueError("확인 응답은 ok, help, timeout 중 하나여야 합니다.")
-    return jsonify({"ok": True, **_demo_snapshot()})
-
-
 @api.get("/onboarding")
 def onboarding():
     demo_mode = bool(current_app.config.get("DEMO_MODE"))

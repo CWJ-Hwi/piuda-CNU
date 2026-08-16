@@ -244,6 +244,11 @@ dialog::backdrop { background: rgba(17, 34, 29, .56); backdrop-filter: blur(4px)
 .wellness-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 26px; }
 .wellness-actions .button { min-height: 66px; font-size: 20px; }
 .wellness-ok { color: white; background: var(--green); }
+.user-danger-dialog { border-color: var(--red); background: #fff3f3; }
+.user-danger-dialog::backdrop { background: rgba(58, 10, 14, .8); }
+.user-danger-dialog .wellness-icon { background: var(--red); box-shadow: 0 0 0 12px var(--red-soft); }
+.user-danger-dialog .eyebrow, .user-danger-dialog .wellness-countdown { color: var(--red) !important; }
+.wellness-actions.single { grid-template-columns: 1fr; }
 
 .demo-console { padding-bottom: 80px; }
 .demo-hero { padding: 52px 0 28px; }

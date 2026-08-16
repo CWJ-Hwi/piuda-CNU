@@ -40,17 +40,17 @@ def test_pwa_assets_have_install_metadata(client):
     assert service_worker.headers["Cache-Control"] == "no-cache"
     assert "api/" in service_worker.get_data(as_text=True)
     worker_script = service_worker.get_data(as_text=True)
-    assert 'const CACHE = "piuda-v29"' in worker_script
-    assert '"/static/app.css?v=29"' in worker_script
-    assert '"/static/app.js?v=29"' in worker_script
+    assert 'const CACHE = "piuda-v30"' in worker_script
+    assert '"/static/app.css?v=30"' in worker_script
+    assert '"/static/app.js?v=30"' in worker_script
     for page in ("/", "/caregiver", "/install"):
         html = client.get(page).get_data(as_text=True)
-        assert '/static/app.css?v=29' in html
-        assert '/static/app.js?v=29' in html
+        assert '/static/app.css?v=30' in html
+        assert '/static/app.js?v=30' in html
     demo_template = Path(client.application.root_path, "templates/demo.html").read_text(encoding="utf-8")
-    assert '/static/app.css?v=29' in demo_template
-    assert '/static/app.js?v=29' in demo_template
-    assert '/static/app.css?v=29' in client.get("/static/offline.html").get_data(as_text=True)
+    assert '/static/app.css?v=30' in demo_template
+    assert '/static/app.js?v=30' in demo_template
+    assert '/static/app.css?v=30' in client.get("/static/offline.html").get_data(as_text=True)
     assert 'url.pathname === "/caregiver"' in worker_script
     assert 'fetch(event.request, { cache: "no-store" })' in worker_script
     assert '"/caregiver",' not in worker_script
@@ -164,14 +164,19 @@ def test_same_wifi_demo_console_and_caregiver_alert_ui(app, client):
     user_page = client.get("/").get_data(as_text=True)
     script = client.get("/static/app.js").get_data(as_text=True)
     assert "발표 시나리오 제어실" in page
-    assert "장면을 선택하면 사용자·보호자 화면이 2초 안에 갱신됩니다." in page
-    assert page.count("data-trigger-scenario=") == 12
+    assert "세 장면을 순서대로 실행하면 사용자·보호자 화면이 2초 안에 갱신됩니다." in page
+    assert page.count("data-trigger-scenario=") == 3
+    assert "식사 지연" in page
+    assert "장시간 비움" in page
+    assert "넘어짐 의심" not in page
     assert 'id="caregiverAlertButton"' in user_page
     assert 'api("/caregiver-alert", { method: "POST" })' in script
     assert "triggerScenario" in script
     assert "notifyNewCaregiverAlert" in script
     assert "RTCPeerConnection" not in script
-    assert "data-wellness-response" in user_page
+    assert 'id="userDangerDialog"' in user_page
+    assert 'risk.scenario_key !== "long_absence"' in script
+    assert "inactivity_check" not in script
 
 
 def test_feedback_passes_recent_conversation_to_model(client, monkeypatch):

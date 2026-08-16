@@ -3,6 +3,7 @@ from werkzeug.security import check_password_hash
 from piuda.auth import setup_required
 from piuda.cli import reset_demo
 from piuda.db import get_db
+from piuda.demo import current_demo_state
 from piuda.scheduler import today_tasks
 
 
@@ -22,6 +23,8 @@ def test_reset_demo_replaces_mutable_data(app):
         assert messages["count"] == 0
         assert check_password_hash(caregiver["pin_hash"], "3017")
         assert setup_required() is False
+        assert current_demo_state()["scenario_key"] == "normal"
+        assert current_demo_state()["risk_score"] == 100
 
 
 def test_reset_demo_revokes_old_pin_token_and_browser_session(app, client):
@@ -62,16 +65,16 @@ def test_demo_console_is_local_and_demo_only(app, client):
     assert denied.status_code == 403
 
 
-def test_demo_catalog_contains_every_presentation_scenario(app, client):
+def test_demo_catalog_contains_only_three_presentation_scenarios(app, client):
     app.config["DEMO_MODE"] = True
     reset_demo(app)
     result = client.get("/api/v1/demo/scenarios").get_json()
-    assert len(result["items"]) == 12
-    assert {item["key"] for item in result["items"]} == {
-        "normal", "medication_reminder", "medication_done", "all_completed",
-        "inactivity_check", "inactivity_ok", "inactivity_no_response",
-        "sensor_offline", "fall", "emergency", "recovered", "caregiver_alert",
-    }
+    assert len(result["items"]) == 3
+    assert [item["key"] for item in result["items"]] == [
+        "normal",
+        "meal_delay",
+        "long_absence",
+    ]
     for item in result["items"]:
         triggered = client.post(f"/api/v1/demo/scenarios/{item['key']}")
         assert triggered.status_code == 200, item["key"]
@@ -86,12 +89,9 @@ def test_demo_scenarios_change_all_three_screens_without_revoking_login(app, cli
     headers = {"Authorization": f"Bearer {token}"}
 
     cases = {
-        "medication_reminder": (100, "normal", 0, 0),
-        "inactivity_check": (70, "caution", 0, 0),
-        "inactivity_no_response": (30, "danger", 0, 1),
-        "fall": (50, "danger", 0, 1),
-        "emergency": (0, "emergency", 2, 1),
-        "all_completed": (100, "normal", 0, 0),
+        "normal": (100, "normal", 0, 0),
+        "meal_delay": (60, "caution", 1, 0),
+        "long_absence": (30, "danger", 0, 1),
     }
     for key, (score, level, missed, alerts) in cases.items():
         triggered = client.post(f"/api/v1/demo/scenarios/{key}")
@@ -106,9 +106,7 @@ def test_demo_scenarios_change_all_three_screens_without_revoking_login(app, cli
         dashboard = client.get("/api/v1/dashboard", headers=headers)
         assert dashboard.status_code == 200
         assert dashboard.get_json()["risk"]["score"] == score
-
-    completed = client.get("/api/v1/tasks/today").get_json()
-    assert completed["summary"]["completed"] == 5
+        assert dashboard.get_json()["risk"]["level_label"] in {"안심", "주의", "위험"}
 
 
 def test_user_can_alert_caregiver_without_duplicates(app, client, monkeypatch):
@@ -148,15 +146,30 @@ def test_removed_call_endpoints_and_tables_are_absent(app, client):
     assert "call_signals" not in tables
 
 
-def test_wellness_check_escalates_only_after_no_response(app, client):
+def test_removed_demo_scenarios_and_wellness_endpoint_are_absent(app, client):
     app.config["DEMO_MODE"] = True
     reset_demo(app)
-    client.post("/api/v1/demo/scenarios/inactivity_check")
-    assert client.get("/api/v1/demo/scenarios").get_json()["open_alerts"] == 0
-    response = client.post("/api/v1/wellness-check", json={"answer": "timeout"})
-    assert response.status_code == 200
-    assert response.get_json()["active"]["scenario_key"] == "inactivity_no_response"
-    assert response.get_json()["open_alerts"] == 1
+    assert client.post("/api/v1/demo/scenarios/fall").status_code == 404
+    assert client.post("/api/v1/demo/scenarios/emergency").status_code == 404
+    assert client.post("/api/v1/wellness-check", json={"answer": "timeout"}).status_code == 404
+
+
+def test_long_absence_creates_danger_alert_for_both_screens(app, client):
+    app.config["DEMO_MODE"] = True
+    reset_demo(app)
+    login = client.post("/api/v1/auth/login", json={"pin": "3017"})
+    headers = {"Authorization": f"Bearer {login.get_json()['token']}"}
+
+    triggered = client.post("/api/v1/demo/scenarios/long_absence")
+    user_risk = client.get("/api/v1/risk/current").get_json()
+    caregiver = client.get("/api/v1/dashboard", headers=headers).get_json()
+
+    assert triggered.status_code == 200
+    assert user_risk["scenario_key"] == "long_absence"
+    assert user_risk["score"] == 30
+    assert user_risk["level_label"] == "위험"
+    assert caregiver["alerts"][0]["title"] == "장시간 비움 위험 알림"
+    assert caregiver["alerts"][0]["level"] == "danger"
 
 
 def test_unknown_demo_scenario_is_rejected(app, client):
