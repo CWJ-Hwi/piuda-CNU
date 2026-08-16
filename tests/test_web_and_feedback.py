@@ -40,17 +40,17 @@ def test_pwa_assets_have_install_metadata(client):
     assert service_worker.headers["Cache-Control"] == "no-cache"
     assert "api/" in service_worker.get_data(as_text=True)
     worker_script = service_worker.get_data(as_text=True)
-    assert 'const CACHE = "piuda-v28"' in worker_script
-    assert '"/static/app.css?v=28"' in worker_script
-    assert '"/static/app.js?v=28"' in worker_script
+    assert 'const CACHE = "piuda-v29"' in worker_script
+    assert '"/static/app.css?v=29"' in worker_script
+    assert '"/static/app.js?v=29"' in worker_script
     for page in ("/", "/caregiver", "/install"):
         html = client.get(page).get_data(as_text=True)
-        assert '/static/app.css?v=28' in html
-        assert '/static/app.js?v=28' in html
+        assert '/static/app.css?v=29' in html
+        assert '/static/app.js?v=29' in html
     demo_template = Path(client.application.root_path, "templates/demo.html").read_text(encoding="utf-8")
-    assert '/static/app.css?v=28' in demo_template
-    assert '/static/app.js?v=28' in demo_template
-    assert '/static/app.css?v=28' in client.get("/static/offline.html").get_data(as_text=True)
+    assert '/static/app.css?v=29' in demo_template
+    assert '/static/app.js?v=29' in demo_template
+    assert '/static/app.css?v=29' in client.get("/static/offline.html").get_data(as_text=True)
     assert 'url.pathname === "/caregiver"' in worker_script
     assert 'fetch(event.request, { cache: "no-store" })' in worker_script
     assert '"/caregiver",' not in worker_script
@@ -79,6 +79,20 @@ def test_caregiver_shows_live_peak_delta_instead_of_wifi_strength(client):
     assert "data-sensor-peak-delta" in script
     assert "refreshSensors" in script
     assert "}, 1000);" in script
+
+
+def test_caregiver_can_edit_free_text_profile_and_schedule_weekdays(client):
+    caregiver = client.get("/caregiver").get_data(as_text=True)
+    script = client.get("/static/app.js").get_data(as_text=True)
+
+    assert 'id="profileDialog"' in caregiver
+    assert 'name="birth_year"' in caregiver
+    assert 'name="gender"' in caregiver
+    assert 'name="health_context"' in caregiver
+    assert 'name="communication_preferences"' in caregiver
+    assert 'type="checkbox" name="weekday"' in caregiver
+    assert 'api("/profile", { method: "PUT", body })' in script
+    assert 'form.getAll("weekday")' in script
 
 
 def test_browser_media_security_policy_is_sent(client):
@@ -176,6 +190,38 @@ def test_feedback_passes_recent_conversation_to_model(client, monkeypatch):
         {"role": "user", "content": "보리차를 마셨어요."},
         {"role": "assistant", "content": "기억했어요."},
     ]
+
+
+def test_feedback_passes_saved_profile_to_model(client, auth_headers, monkeypatch):
+    captured = {}
+
+    def fake_feedback(message, context, history):
+        captured.update(context)
+        return "알겠습니다."
+
+    monkeypatch.setattr("piuda.api.ollama_feedback", fake_feedback)
+    saved = client.put(
+        "/api/v1/profile",
+        headers=auth_headers,
+        json={
+            "user_name": "김피움",
+            "birth_year": 1952,
+            "gender": "female",
+            "health_context": "무릎이 불편합니다.",
+            "communication_preferences": "짧고 천천히 말해 주세요.",
+        },
+    )
+    response = client.post("/api/v1/feedback", json={"message": "오늘은 무엇을 할까요?"})
+
+    assert saved.status_code == 200
+    assert response.status_code == 200
+    assert captured["profile"] == {
+        "user_name": "김피움",
+        "birth_year": 1952,
+        "gender": "female",
+        "health_context": "무릎이 불편합니다.",
+        "communication_preferences": "짧고 천천히 말해 주세요.",
+    }
 
 
 def test_feedback_history_returns_latest_five_exchanges(client, monkeypatch):

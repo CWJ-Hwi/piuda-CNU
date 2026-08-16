@@ -5,13 +5,16 @@ CREATE TABLE IF NOT EXISTS schema_meta (
     value TEXT NOT NULL
 );
 
-INSERT INTO schema_meta(key, value) VALUES ('schema_version', '6')
+INSERT INTO schema_meta(key, value) VALUES ('schema_version', '7')
 ON CONFLICT(key) DO UPDATE SET value = excluded.value;
 
 CREATE TABLE IF NOT EXISTS profile (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     user_name TEXT NOT NULL DEFAULT '사용자',
     birth_year INTEGER,
+    gender TEXT NOT NULL DEFAULT '',
+    health_context TEXT NOT NULL DEFAULT '',
+    communication_preferences TEXT NOT NULL DEFAULT '',
     caregiver_name TEXT NOT NULL DEFAULT '보호자',
     caregiver_phone TEXT,
     locale TEXT NOT NULL DEFAULT 'ko-KR',

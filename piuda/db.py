@@ -36,6 +36,21 @@ def init_database(path: str | Path) -> None:
         ).fetchone()
         if alerts_exists:
             connection.execute("DELETE FROM alerts WHERE title='보호자 통화 요청'")
+        profile_exists = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='profile'"
+        ).fetchone()
+        if profile_exists:
+            profile_columns = {
+                row["name"] for row in connection.execute("PRAGMA table_info(profile)")
+            }
+            profile_additions = {
+                "gender": "TEXT NOT NULL DEFAULT ''",
+                "health_context": "TEXT NOT NULL DEFAULT ''",
+                "communication_preferences": "TEXT NOT NULL DEFAULT ''",
+            }
+            for name, definition in profile_additions.items():
+                if name not in profile_columns:
+                    connection.execute(f"ALTER TABLE profile ADD COLUMN {name} {definition}")
         # v5에서는 음성 통화 기능과 WebRTC 신호 저장소를 제거했습니다.
         # 이전 설치본의 불필요한 통화 데이터도 마이그레이션 시 함께 삭제합니다.
         connection.execute("DROP TABLE IF EXISTS call_signals")

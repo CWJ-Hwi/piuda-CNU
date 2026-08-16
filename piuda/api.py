@@ -241,8 +241,23 @@ def logout():
 
 @api.get("/profile")
 def get_profile():
-    row = get_db().execute("SELECT * FROM profile WHERE id = 1").fetchone()
-    return jsonify(json_row(row) or {"user_name": "사용자", "caregiver_name": "보호자", "locale": "ko-KR"})
+    # 사용자 화면에는 이름 등 기존 공개 필드만 전달합니다. 건강·장애 관련
+    # 자유 서술은 인증된 보호자 대시보드와 내부 LLM 컨텍스트에서만 사용합니다.
+    row = get_db().execute(
+        """
+        SELECT id, user_name, birth_year, caregiver_name, caregiver_phone, locale, updated_at
+        FROM profile WHERE id = 1
+        """
+    ).fetchone()
+    return jsonify(
+        json_row(row)
+        or {
+            "user_name": "사용자",
+            "birth_year": None,
+            "caregiver_name": "보호자",
+            "locale": "ko-KR",
+        }
+    )
 
 
 @api.put("/profile")
@@ -268,6 +283,29 @@ def put_profile():
         maximum=now().year,
         allow_none=True,
     )
+    gender = text_value(
+        data.get("gender", existing["gender"] if existing else ""),
+        "성별",
+        required=False,
+        max_length=20,
+    )
+    if gender not in {"", "female", "male", "other"}:
+        raise ValueError("지원하지 않는 성별 값입니다.")
+    health_context = text_value(
+        data.get("health_context", existing["health_context"] if existing else ""),
+        "질병·장애·돌봄 참고 정보",
+        required=False,
+        max_length=2000,
+    )
+    communication_preferences = text_value(
+        data.get(
+            "communication_preferences",
+            existing["communication_preferences"] if existing else "",
+        ),
+        "대화 방식과 주의사항",
+        required=False,
+        max_length=1000,
+    )
     caregiver_phone = text_value(
         data.get("caregiver_phone", existing["caregiver_phone"] if existing else None),
         "보호자 전화번호",
@@ -282,16 +320,24 @@ def put_profile():
     )
     database.execute(
         """
-        INSERT INTO profile(id, user_name, birth_year, caregiver_name, caregiver_phone, locale, updated_at)
-        VALUES (1, ?, ?, ?, ?, ?, ?)
+        INSERT INTO profile(
+          id, user_name, birth_year, gender, health_context, communication_preferences,
+          caregiver_name, caregiver_phone, locale, updated_at
+        )
+        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           user_name=excluded.user_name, birth_year=excluded.birth_year,
+          gender=excluded.gender, health_context=excluded.health_context,
+          communication_preferences=excluded.communication_preferences,
           caregiver_name=excluded.caregiver_name, caregiver_phone=excluded.caregiver_phone,
           locale=excluded.locale, updated_at=excluded.updated_at
         """,
         (
             user_name,
             birth_year,
+            gender,
+            health_context,
+            communication_preferences,
             caregiver_name,
             caregiver_phone,
             locale,
@@ -299,7 +345,7 @@ def put_profile():
         ),
     )
     database.commit()
-    return get_profile()
+    return jsonify(json_row(database.execute("SELECT * FROM profile WHERE id=1").fetchone()))
 
 
 @api.get("/routines")
@@ -699,6 +745,8 @@ def feedback():
     message = text_value(data.get("message"), "message", max_length=500)
     tasks = today_tasks()
     risk = evaluate_and_notify()
+    database = get_db()
+    profile = json_row(database.execute("SELECT * FROM profile WHERE id=1").fetchone()) or {}
     context = {
         "risk": {"score": risk["score"], "level": risk["level_label"], "factors": risk["factors"]},
         "pending_tasks": [item["title"] for item in tasks if item["status"] != "completed"],
@@ -711,8 +759,14 @@ def feedback():
             }
             for item in tasks
         ],
+        "profile": {
+            "user_name": profile.get("user_name") or "사용자",
+            "birth_year": profile.get("birth_year"),
+            "gender": profile.get("gender") or "",
+            "health_context": profile.get("health_context") or "",
+            "communication_preferences": profile.get("communication_preferences") or "",
+        },
     }
-    database = get_db()
     history_rows = database.execute(
         "SELECT role, content FROM feedback_messages ORDER BY id DESC LIMIT 10"
     ).fetchall()

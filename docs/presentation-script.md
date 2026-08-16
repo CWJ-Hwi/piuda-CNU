@@ -104,7 +104,7 @@
 
 **발표 멘트**
 
-> 보호자 화면은 오늘 일정, 건강 점수, 감점 근거, 센서 연결 상태, 최근 이벤트와 알림을 한 번에 조회합니다. 화면은 2초마다 갱신되고 새 위험 알림은 큰 팝업과 소리로 표시됩니다. 확인 버튼을 누르면 처리 시각이 기록됩니다. 보호자 PIN은 Werkzeug 해시로 저장하고, 로그인 토큰과 센서 API 키도 원문이 아니라 SHA-256 해시만 데이터베이스에 보관합니다. 대시보드의 변경·조회 API는 보호자 세션이나 bearer token을 요구합니다.
+> 보호자 화면은 오늘 일정, 건강 점수, 감점 근거, 센서 연결 상태, 최근 이벤트와 알림을 한 번에 조회합니다. 일정은 월요일부터 일요일까지 반복 요일을 직접 선택할 수 있습니다. 보호자는 연령과 성별을 선택하고 질병, 장애, 돌봄 참고 정보와 선호하는 대화 방식을 문장으로 기록할 수 있습니다. 이 민감한 자유 서술은 공개 프로필 API가 아니라 인증된 보호자 화면과 내부 AI 입력에서만 사용합니다. 화면은 2초마다 갱신되고 새 위험 알림은 큰 팝업과 소리로 표시됩니다. 확인 버튼을 누르면 처리 시각이 기록됩니다. 보호자 PIN은 Werkzeug 해시로 저장하고, 로그인 토큰과 센서 API 키도 원문이 아니라 SHA-256 해시만 데이터베이스에 보관합니다.
 
 ### 04:55–06:00 · 로컬 AI, 대화 기억, 안전 폴백
 
@@ -117,7 +117,7 @@
 
 **발표 멘트**
 
-> 생활 도우미에는 현재 점수와 오늘 일정, 최근 대화를 함께 제공합니다. 일반 질문은 Raspberry Pi의 Ollama에서 한국어 특화 HyperCLOVA X SEED 1.5B Q4 모델로 처리하고, 최근 대화는 SQLite에 저장해 다음 응답에 반영합니다. 반면 ‘다음 할 일’, 특정 시간의 일정, 남은 일정, 119가 필요한 긴급 표현은 모델을 기다리지 않고 규칙 기반으로 즉시 답합니다. 모델이 지연되거나 실패해도 긴급 안전 문구 또는 다음 일정으로 폴백합니다. 답변은 길이와 마크다운을 정리한 뒤 Pi에서 한국어 음성으로 읽습니다. 두 번째 질문은 저장된 사용자 발화를 찾아 ‘보리차’라고 답하므로 기억을 추측하지 않습니다.
+> 생활 도우미에는 현재 점수와 오늘 일정, 최근 대화뿐 아니라 보호자가 등록한 연령, 성별, 질병·장애 참고 정보와 대화 선호를 함께 제공합니다. 일반 질문은 Raspberry Pi의 Ollama에서 한국어 특화 HyperCLOVA X SEED 1.5B Q4 모델로 처리하며, 모델은 이 정보를 표현 난이도와 제안 방식에만 반영하고 의료 진단이나 복약 변경은 하지 않도록 제한합니다. 최근 대화는 SQLite에 저장해 다음 응답에 반영합니다. 반면 ‘다음 할 일’, 특정 시간의 일정, 남은 일정, 119가 필요한 긴급 표현은 모델을 기다리지 않고 규칙 기반으로 즉시 답합니다. 모델이 지연되거나 실패해도 긴급 안전 문구 또는 다음 일정으로 폴백합니다. 답변은 길이와 마크다운을 정리한 뒤 Pi에서 한국어 음성으로 읽습니다. 두 번째 질문은 저장된 사용자 발화를 찾아 ‘보리차’라고 답하므로 기억을 추측하지 않습니다.
 
 ### 06:00–07:30 · 사용자 직접 보호자 알림
 
@@ -164,11 +164,12 @@
 | 사용자 선확인 | 발표 상태가 `inactivity_check`이면 30초 다이얼로그, `ok/help/timeout`을 wellness API로 전송 | `piuda/static/app.js`의 `syncWellnessPrompt()`, `respondWellness()`; `piuda/api.py`의 `wellness_check()` |
 | 발표 제어실 | 로컬·데모 모드에서만 12개 장면 허용, 로그인은 보존하면서 데이터 상태를 재현 | `piuda/api.py`의 `_demo_access_error()`; `piuda/demo.py`의 `trigger_demo_scenario()` |
 | 보호자 동기화 | 사용자·보호자·제어실을 2초 주기로 `no-store` API 조회, 포커스 복귀 시 즉시 새로고침 | `piuda/static/app.js`의 `refreshUserSnapshot()`, `loadDashboard()`, `loadDemoStatus()` |
+| 사용자 맞춤 AI | 보호자가 등록한 출생연도·성별·질병·장애·대화 선호를 인증 영역에 저장하고 데이터로 구분해 Ollama 프롬프트에 전달; 의료 진단·복약 변경 금지 | `piuda/api.py`의 `put_profile()`, `feedback()`; `piuda/integrations.py`의 `ollama_feedback()` |
 | 로컬 AI | 긴급·일정 질문 우선 규칙, 최근 대화와 현재 맥락을 Ollama chat에 전달, 출력 정제, 실패 시 안전 폴백 | `piuda/integrations.py`의 `_fast_feedback()`, `_recall_recent_user_message()`, `ollama_feedback()` |
 | 음성 입출력 | Pi 키오스크가 USB 마이크를 5초간 직접 녹음하고 whisper.cpp base·Silero VAD로 오프라인 한국어 STT 처리, 답변은 `/tts`의 Supertonic 3 음성만 사용 | `piuda/stt.py`; `piuda/static/app.js`의 `recordLocalVoice()`, `speak()`; `piuda/tts.py`; `piuda/api.py`의 `local_voice_listen()`, `local_tts()` |
 | 보호자 인증 | PIN 해시, 세션 인증 버전, 해시된 bearer token, 로그아웃 시 토큰 폐기 | `piuda/auth.py`; `piuda/schema.sql`의 `caregivers`, `api_tokens` |
 | 로컬 저장 | SQLite 외래 키, WAL, 5초 busy timeout; 일정·센서·점수·알림·대화 분리 저장 | `piuda/db.py`; `piuda/schema.sql` |
-| PWA 배포 | 사용자·보호자 manifest, v23 shell 캐시, 고정 핫스팟 QR, 자산별 독립 설치 캐시, `event.waitUntil` 기반 백그라운드 갱신 | `piuda/static/service-worker.js`; `scripts/generate_pwa_assets.swift`; `pyproject.toml` |
+| PWA 배포 | 사용자·보호자 manifest, 버전형 shell 캐시, 고정 핫스팟 QR, 자산별 독립 설치 캐시, `event.waitUntil` 기반 백그라운드 갱신 | `piuda/static/service-worker.js`; `scripts/generate_pwa_assets.swift`; `pyproject.toml` |
 
 ## 구현 범위를 정확히 말하기
 

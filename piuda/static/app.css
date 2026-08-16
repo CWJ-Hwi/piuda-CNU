@@ -165,6 +165,13 @@ input:focus, select:focus, textarea:focus { border-color: var(--green); box-shad
 .dashboard-grid { margin-top: 14px; display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; align-items: start; }
 .panel { background: var(--surface); border: 1px solid rgba(29,74,60,.1); border-radius: var(--radius); padding: 24px; min-height: 250px; }
 .panel.wide { grid-column: span 2; }
+.profile-panel { min-height: 0; background: linear-gradient(135deg, #f9fcfa, var(--surface)); }
+.profile-summary { margin-top: 18px; display: grid; grid-template-columns: .7fr 1.4fr 1.4fr; gap: 10px; }
+.profile-summary > div { min-width: 0; padding: 14px; border: 1px solid #dbe7e1; border-radius: 15px; background: rgba(255,255,255,.8); }
+.profile-summary span { display: block; margin-bottom: 6px; color: var(--muted); font-size: 11px; font-weight: 850; }
+.profile-summary strong { color: var(--green-dark); font-size: 17px; }
+.profile-summary p { margin: 0; overflow-wrap: anywhere; color: var(--ink); font-size: 13px; line-height: 1.5; white-space: pre-line; }
+.profile-caveat { margin: 12px 2px 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
 .compact-list, .factor-list, .timeline { margin-top: 20px; display: grid; gap: 10px; }
 .compact-item { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 16px; padding: 14px 0; border-top: 1px solid var(--line); }
 .compact-item:first-child { border-top: 0; }
@@ -204,6 +211,16 @@ dialog { width: min(520px, calc(100% - 28px)); border: 0; border-radius: 26px; p
 dialog::backdrop { background: rgba(17, 34, 29, .56); backdrop-filter: blur(4px); }
 .dialog-form { display: grid; gap: 16px; padding: 26px; }
 .dialog-form .panel-title { align-items: center; margin-bottom: 4px; }
+.profile-form { max-height: min(88vh, 820px); overflow-y: auto; }
+.form-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.weekday-fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.weekday-fieldset legend { margin-bottom: 8px; color: var(--muted); font-size: 13px; font-weight: 800; }
+.weekday-picker { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.weekday-picker label { display: block; cursor: pointer; }
+.weekday-picker input { position: absolute; opacity: 0; pointer-events: none; }
+.weekday-picker span { min-height: 38px; display: grid; place-items: center; border: 1px solid #cbd4cf; border-radius: 11px; color: var(--muted); background: white; font-size: 13px; font-weight: 850; }
+.weekday-picker input:checked + span { border-color: var(--green); color: white; background: var(--green); }
+.weekday-picker input:focus-visible + span { box-shadow: 0 0 0 3px rgba(29,107,84,.18); }
 .help { margin: 0; color: var(--muted); font-size: 12px; }
 .key-result { white-space: pre-wrap; word-break: break-all; background: #edf4ef; border-radius: 12px; padding: 13px; font-size: 12px; }
 .local-alert-dialog { width: min(520px, calc(100% - 24px)); border: 4px solid var(--orange); color: var(--ink); background: #fffaf1; }
@@ -474,6 +491,9 @@ dialog::backdrop { background: rgba(17, 34, 29, .56); backdrop-filter: blur(4px)
   body[data-page="caregiver"] .dashboard-grid { margin-top: 9px; gap: 9px; }
   body[data-page="caregiver"] .panel { min-height: 0; padding: 15px; border-radius: 18px; }
   body[data-page="caregiver"] .panel-title h2 { font-size: 22px; }
+  body[data-page="caregiver"] .profile-summary { grid-template-columns: 1fr; margin-top: 11px; gap: 7px; }
+  body[data-page="caregiver"] .profile-summary > div { padding: 11px; }
+  body[data-page="caregiver"] .profile-caveat { font-size: 10px; }
   body[data-page="caregiver"] .compact-list, body[data-page="caregiver"] .factor-list, body[data-page="caregiver"] .timeline { margin-top: 9px; gap: 6px; }
   body[data-page="caregiver"] .compact-item { gap: 10px; padding: 9px 0; }
   body[data-page="caregiver"] .compact-item strong { margin-bottom: 2px; font-size: 14px; }
@@ -481,6 +501,7 @@ dialog::backdrop { background: rgba(17, 34, 29, .56); backdrop-filter: blur(4px)
   body[data-page="caregiver"] .factor-item { padding: 11px; font-size: 13px; }
   body[data-page="caregiver"] .empty-state { padding: 20px 12px; border-radius: 14px; }
   body[data-page="caregiver"] .timeline-item { padding-bottom: 9px; }
+  body[data-page="caregiver"] .form-columns { grid-template-columns: 1fr; }
 
   body[data-page="demo"] .topbar { min-height: 64px; }
   body[data-page="demo"] .brand small, body[data-page="demo"] .connection { display: none; }

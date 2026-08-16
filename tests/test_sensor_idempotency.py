@@ -89,7 +89,44 @@ def test_schema_v3_database_gains_event_id_without_losing_events(tmp_path):
         assert migrated.execute("SELECT COUNT(*) FROM sensor_events").fetchone()[0] == 1
         assert migrated.execute(
             "SELECT value FROM schema_meta WHERE key='schema_version'"
-        ).fetchone()[0] == "6"
+        ).fetchone()[0] == "7"
+    finally:
+        migrated.close()
+
+
+def test_schema_v6_profile_gains_llm_context_without_losing_profile(tmp_path):
+    database_path = tmp_path / "v6-profile.db"
+    connection = sqlite3.connect(database_path)
+    connection.executescript(
+        """
+        CREATE TABLE schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+        INSERT INTO schema_meta(key, value) VALUES ('schema_version', '6');
+        CREATE TABLE profile (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          user_name TEXT NOT NULL DEFAULT '사용자',
+          birth_year INTEGER,
+          caregiver_name TEXT NOT NULL DEFAULT '보호자',
+          caregiver_phone TEXT,
+          locale TEXT NOT NULL DEFAULT 'ko-KR',
+          updated_at TEXT NOT NULL
+        );
+        INSERT INTO profile(id, user_name, birth_year, caregiver_name, locale, updated_at)
+        VALUES (1, '기존 사용자', 1950, '기존 보호자', 'ko-KR', '2026-08-12T12:00:00+09:00');
+        """
+    )
+    connection.commit()
+    connection.close()
+
+    init_database(database_path)
+
+    migrated = sqlite3.connect(database_path)
+    try:
+        columns = {row[1] for row in migrated.execute("PRAGMA table_info(profile)")}
+        assert {"gender", "health_context", "communication_preferences"} <= columns
+        profile = migrated.execute(
+            "SELECT user_name, birth_year, gender, health_context, communication_preferences FROM profile"
+        ).fetchone()
+        assert profile == ("기존 사용자", 1950, "", "", "")
     finally:
         migrated.close()
 

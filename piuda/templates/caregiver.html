@@ -11,7 +11,7 @@
   <title>피우다 · 보호자</title>
   <link rel="manifest" href="/caregiver-manifest.webmanifest">
   <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/icon-180.png">
-  <link rel="stylesheet" href="/static/app.css?v=28">
+  <link rel="stylesheet" href="/static/app.css?v=29">
 </head>
 <body data-page="caregiver">
   <header class="topbar shell">
@@ -48,6 +48,15 @@
       </section>
 
       <section class="dashboard-grid">
+        <article class="panel wide profile-panel">
+          <div class="panel-title"><div><p class="eyebrow">AI 답변 참고 정보</p><h2>사용자 정보</h2></div><button class="text-button" data-dialog="profileDialog">정보 수정</button></div>
+          <div class="profile-summary">
+            <div class="profile-identity"><span>연령 · 성별</span><strong id="profileIdentity">미입력</strong></div>
+            <div><span>질병·장애·돌봄 참고</span><p id="profileHealthContext">아직 입력하지 않았습니다.</p></div>
+            <div><span>대화 방식과 주의사항</span><p id="profileCommunication">아직 입력하지 않았습니다.</p></div>
+          </div>
+          <p class="profile-caveat">저장한 정보는 사용자 화면의 AI 답변을 조절하는 참고 자료로만 사용되며 의료 판단을 대신하지 않습니다.</p>
+        </article>
         <article class="panel wide"><div class="panel-title"><div><p class="eyebrow">오늘</p><h2>일정 진행</h2></div><button class="text-button" data-dialog="routineDialog">일정 추가</button></div><div id="careTaskList" class="compact-list"></div></article>
         <article class="panel"><div class="panel-title"><div><p class="eyebrow">판단 근거</p><h2>살펴본 신호</h2></div></div><div id="riskFactors" class="factor-list"></div></article>
         <article class="panel"><div class="panel-title"><div><p class="eyebrow">최근</p><h2>보호자 알림</h2></div></div><div id="alertList" class="compact-list"></div></article>
@@ -62,9 +71,31 @@
       <label>일정 이름<input name="title" required maxlength="80" placeholder="예: 아침 약 복용"></label>
       <label>분류<select name="category"><option value="medication">복약</option><option value="meal">식사</option><option value="cleaning">청소</option><option value="sleep">수면</option><option value="outing">외출</option><option value="hospital">병원</option><option value="other">기타</option></select></label>
       <label>시간<input name="scheduled_time" type="time" required></label>
+      <fieldset class="weekday-fieldset"><legend>반복 요일</legend><div class="weekday-picker">
+        <label><input type="checkbox" name="weekday" value="1" checked><span>월</span></label>
+        <label><input type="checkbox" name="weekday" value="2" checked><span>화</span></label>
+        <label><input type="checkbox" name="weekday" value="4" checked><span>수</span></label>
+        <label><input type="checkbox" name="weekday" value="8" checked><span>목</span></label>
+        <label><input type="checkbox" name="weekday" value="16" checked><span>금</span></label>
+        <label><input type="checkbox" name="weekday" value="32" checked><span>토</span></label>
+        <label><input type="checkbox" name="weekday" value="64" checked><span>일</span></label>
+      </div></fieldset>
       <label>안내 문구<textarea name="instructions" rows="3" placeholder="사용자에게 보여줄 짧은 안내"></textarea></label>
-      <p class="help">현재는 매일 반복으로 등록됩니다. 요일 편집은 API에서 지원합니다.</p>
       <button class="button primary" type="submit">일정 저장</button>
+    </form>
+  </dialog>
+
+  <dialog id="profileDialog">
+    <form id="profileForm" class="dialog-form profile-form"><div class="panel-title"><div><p class="eyebrow">AI 답변 맞춤 설정</p><h2>사용자 정보</h2></div><button type="button" class="icon-button" data-close>닫기</button></div>
+      <label>이름<input name="user_name" maxlength="40" required placeholder="사용자 이름"></label>
+      <div class="form-columns">
+        <label>연령<select name="birth_year" id="profileBirthYear"><option value="">선택하지 않음</option></select></label>
+        <label>성별<select name="gender"><option value="">선택하지 않음</option><option value="female">여성</option><option value="male">남성</option><option value="other">기타</option></select></label>
+      </div>
+      <label>질병·장애·돌봄 참고 정보<textarea name="health_context" rows="5" maxlength="2000" placeholder="예: 고혈압으로 매일 아침 약을 복용합니다. 무릎이 불편해 오래 걷기 어렵습니다."></textarea></label>
+      <label>대화 방식과 주의사항<textarea name="communication_preferences" rows="4" maxlength="1000" placeholder="예: 한 번에 한 가지씩 짧고 천천히 설명해 주세요. 큰 숫자는 풀어서 말해 주세요."></textarea></label>
+      <p class="help">체크 항목으로 제한하지 않고 필요한 내용을 문장으로 적을 수 있습니다. 긴급하거나 중요한 의료 결정은 반드시 의료진·보호자와 확인해 주세요.</p>
+      <button class="button primary" type="submit">사용자 정보 저장</button>
     </form>
   </dialog>
 
@@ -89,6 +120,6 @@
   </dialog>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="/static/app.js?v=28" defer></script>
+  <script src="/static/app.js?v=29" defer></script>
 </body>
 </html>

@@ -17,6 +17,7 @@ const state = {
   lastAlertId: null,
   alertAudioContext: null,
   userName: "사용자",
+  profile: {},
   conversation: [],
   userTaskSnapshot: null,
   taskUndoUntil: new Map(),
@@ -529,8 +530,13 @@ async function initCaregiver() {
   $("#refreshButton").addEventListener("click", loadDashboard);
   $("#localAlertAcknowledge").addEventListener("click", acknowledgeLocalAlert);
   $("#routineForm").addEventListener("submit", submitRoutine);
+  $("#profileForm").addEventListener("submit", submitProfile);
   $("#sensorForm").addEventListener("submit", submitSensor);
-  $$('[data-dialog]').forEach(button => button.addEventListener("click", () => $("#" + button.dataset.dialog).showModal()));
+  populateBirthYearOptions();
+  $$('[data-dialog]').forEach(button => button.addEventListener("click", () => {
+    if (button.dataset.dialog === "profileDialog") populateProfileForm(state.profile);
+    $("#" + button.dataset.dialog).showModal();
+  }));
   $$('[data-close]').forEach(button => button.addEventListener("click", () => button.closest("dialog").close()));
   $("#alertList").addEventListener("click", acknowledgeAlert);
   document.addEventListener("pointerdown", prepareAlertAudio, { once: true });
@@ -609,10 +615,12 @@ async function loadDashboard() {
     $("#dashboard").classList.remove("hidden");
     $("#logoutButton").classList.remove("hidden");
     state.userName = result.profile?.user_name || "사용자";
+    state.profile = result.profile || {};
     $("#careUserName").textContent = state.userName;
     $("#careDate").textContent = new Date().toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "long" });
     $("#lastRefresh").textContent = new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
     renderCareRisk(result.risk);
+    renderProfileSummary(state.profile);
     renderCareTasks(result.tasks);
     renderAlerts(result.alerts);
     renderEvents(result.sensor_events);
@@ -725,6 +733,42 @@ function renderCareTasks(tasks) {
   $("#careTaskList").innerHTML = tasks.length ? tasks.map(item => `<div class="compact-item"><div><strong>${escapeHTML(item.scheduled_time)} · ${escapeHTML(item.title)}</strong><small>${escapeHTML(item.instructions || item.category)}</small></div><span class="pill ${item.status}">${({pending:"예정",completed:"완료",missed:"미수행",skipped:"건너뜀"})[item.status]}</span></div>`).join("") : '<div class="empty-state">오늘 일정이 없습니다.</div>';
 }
 
+function profileIdentity(profile) {
+  const parts = [];
+  const birthYear = Number(profile?.birth_year);
+  if (Number.isInteger(birthYear) && birthYear >= 1900) {
+    parts.push(`약 ${new Date().getFullYear() - birthYear}세 · ${birthYear}년생`);
+  }
+  const gender = { female: "여성", male: "남성", other: "기타" }[profile?.gender];
+  if (gender) parts.push(gender);
+  return parts.join(" · ") || "미입력";
+}
+
+function renderProfileSummary(profile) {
+  $("#profileIdentity").textContent = profileIdentity(profile);
+  $("#profileHealthContext").textContent = profile?.health_context || "아직 입력하지 않았습니다.";
+  $("#profileCommunication").textContent = profile?.communication_preferences || "아직 입력하지 않았습니다.";
+}
+
+function populateBirthYearOptions() {
+  const select = $("#profileBirthYear");
+  const currentYear = new Date().getFullYear();
+  const options = ['<option value="">선택하지 않음</option>'];
+  for (let year = currentYear; year >= 1900; year -= 1) {
+    options.push(`<option value="${year}">약 ${currentYear - year}세 · ${year}년생</option>`);
+  }
+  select.innerHTML = options.join("");
+}
+
+function populateProfileForm(profile) {
+  const form = $("#profileForm");
+  form.elements.user_name.value = profile?.user_name || "사용자";
+  form.elements.birth_year.value = profile?.birth_year == null ? "" : String(profile.birth_year);
+  form.elements.gender.value = profile?.gender || "";
+  form.elements.health_context.value = profile?.health_context || "";
+  form.elements.communication_preferences.value = profile?.communication_preferences || "";
+}
+
 function renderAlerts(alerts) {
   const open = alerts.filter(item => !item.acknowledged_at);
   $("#alertMetric").textContent = open.length;
@@ -796,13 +840,44 @@ async function submitRoutine(event) {
   event.preventDefault();
   const formElement = event.currentTarget;
   const form = new FormData(formElement);
+  const daysMask = form.getAll("weekday").reduce((mask, value) => mask + Number(value), 0);
+  if (!daysMask) {
+    toast("반복할 요일을 하나 이상 선택해 주세요.");
+    return;
+  }
+  const body = Object.fromEntries(form.entries());
+  delete body.weekday;
+  body.days_mask = daysMask;
   try {
-    await api("/routines", { method: "POST", body: Object.fromEntries(form.entries()) });
+    await api("/routines", { method: "POST", body });
     formElement.reset();
     $("#routineDialog").close();
     toast("반복 일정을 등록했습니다.");
     await loadDashboard();
   } catch (error) { toast(error.message); }
+}
+
+async function submitProfile(event) {
+  event.preventDefault();
+  const formElement = event.currentTarget;
+  const form = new FormData(formElement);
+  const body = Object.fromEntries(form.entries());
+  body.birth_year = body.birth_year ? Number(body.birth_year) : null;
+  const submitButton = formElement.querySelector('[type="submit"]');
+  submitButton.disabled = true;
+  try {
+    const profile = await api("/profile", { method: "PUT", body });
+    state.profile = profile;
+    state.userName = profile.user_name || "사용자";
+    $("#careUserName").textContent = state.userName;
+    renderProfileSummary(profile);
+    $("#profileDialog").close();
+    toast("사용자 정보를 저장했습니다. 다음 AI 답변부터 반영됩니다.");
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    submitButton.disabled = false;
+  }
 }
 
 async function submitSensor(event) {

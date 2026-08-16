@@ -66,8 +66,16 @@ def reset_demo(app, preserve_auth: bool = False) -> None:
         timestamp = iso()
         database.execute(
             """
-            INSERT INTO profile(id, user_name, birth_year, caregiver_name, caregiver_phone, locale, updated_at)
-            VALUES (1, '김피움', 1952, '보호자', NULL, 'ko-KR', ?)
+            INSERT INTO profile(
+              id, user_name, birth_year, gender, health_context, communication_preferences,
+              caregiver_name, caregiver_phone, locale, updated_at
+            )
+            VALUES (
+              1, '김피움', 1952, 'female',
+              '고혈압으로 매일 약을 복용합니다. 무릎이 불편해 오래 걷기 어렵습니다.',
+              '한 번에 한 가지씩 짧고 천천히 설명해 주세요.',
+              '보호자', NULL, 'ko-KR', ?
+            )
             """,
             (timestamp,),
         )
