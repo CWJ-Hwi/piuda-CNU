@@ -455,7 +455,7 @@ dialog::backdrop { background: rgba(17, 34, 29, .56); backdrop-filter: blur(4px)
   body[data-page="user"] .quick-prompts button { min-height: 43px; padding: 0 8px; color: white; border: 2px solid #d8eee5; border-radius: 9px; background: #244f46; font-size: 14px; }
   body[data-page="user"] .assistant-form { margin-top: 7px; grid-template-columns: 1fr 1fr; gap: 5px 6px; }
   body[data-page="user"] .assistant-form input { min-height: 45px; grid-column: 1 / -1; padding: 8px 10px; border: 3px solid #071c17; border-radius: 9px; font-size: 15px; }
-  body[data-page="user"] .assistant-form .button { min-height: 43px; padding: 0 8px; border: 2px solid white; border-radius: 9px; font-size: 14px; box-shadow: none; }
+  body[data-page="user"] .assistant-form .button { min-height: 56px; padding: 0 10px; border: 2px solid white; border-radius: 10px; font-size: 15px; box-shadow: none; }
   body[data-page="user"] .assistant-form .secondary { color: white; background: #255f50; }
   body[data-page="user"] .assistant-form .primary { color: #102b25; background: #ffd980; }
   body[data-page="user"] .input-hint { margin: -1px 1px 0; color: #e9fff6; font-size: 12px; text-align: center; }

@@ -40,17 +40,17 @@ def test_pwa_assets_have_install_metadata(client):
     assert service_worker.headers["Cache-Control"] == "no-cache"
     assert "api/" in service_worker.get_data(as_text=True)
     worker_script = service_worker.get_data(as_text=True)
-    assert 'const CACHE = "piuda-v30"' in worker_script
-    assert '"/static/app.css?v=30"' in worker_script
-    assert '"/static/app.js?v=30"' in worker_script
+    assert 'const CACHE = "piuda-v31"' in worker_script
+    assert '"/static/app.css?v=31"' in worker_script
+    assert '"/static/app.js?v=31"' in worker_script
     for page in ("/", "/caregiver", "/install"):
         html = client.get(page).get_data(as_text=True)
-        assert '/static/app.css?v=30' in html
-        assert '/static/app.js?v=30' in html
+        assert '/static/app.css?v=31' in html
+        assert '/static/app.js?v=31' in html
     demo_template = Path(client.application.root_path, "templates/demo.html").read_text(encoding="utf-8")
-    assert '/static/app.css?v=30' in demo_template
-    assert '/static/app.js?v=30' in demo_template
-    assert '/static/app.css?v=30' in client.get("/static/offline.html").get_data(as_text=True)
+    assert '/static/app.css?v=31' in demo_template
+    assert '/static/app.js?v=31' in demo_template
+    assert '/static/app.css?v=31' in client.get("/static/offline.html").get_data(as_text=True)
     assert 'url.pathname === "/caregiver"' in worker_script
     assert 'fetch(event.request, { cache: "no-store" })' in worker_script
     assert '"/caregiver",' not in worker_script
