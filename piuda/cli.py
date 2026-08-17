@@ -43,6 +43,7 @@ def reset_demo(app, preserve_auth: bool = False) -> None:
 
         database = get_db()
         scene_tables = (
+            "status_checks",
             "alerts",
             "risk_assessments",
             "sensor_events",
@@ -60,7 +61,7 @@ def reset_demo(app, preserve_auth: bool = False) -> None:
         if not preserve_auth:
             database.execute(
                 "DELETE FROM sqlite_sequence WHERE name IN "
-                "('alerts','risk_assessments','sensor_events','sensor_devices','task_occurrences',"
+                "('status_checks','alerts','risk_assessments','sensor_events','sensor_devices','task_occurrences',"
                 "'routines','api_tokens','caregivers','feedback_messages')"
             )
         timestamp = iso()

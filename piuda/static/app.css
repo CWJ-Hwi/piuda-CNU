@@ -149,6 +149,17 @@ input:focus, select:focus, textarea:focus { border-color: var(--green); box-shad
 .dashboard-head { display: flex; justify-content: space-between; align-items: end; gap: 30px; padding: 44px 0 32px; }
 .dashboard-head h1 { font-size: clamp(38px, 5vw, 58px); }
 .dashboard-head > div > p:last-child { color: var(--muted); font-size: 13px; }
+.dashboard-action-stack { width: min(390px, 44vw); display: grid; justify-items: end; gap: 10px; }
+.dashboard-action-stack .dashboard-actions { display: flex; justify-content: flex-end; gap: 9px; }
+.status-check-summary { width: 100%; padding: 13px 15px; border: 1px solid rgba(29,74,60,.15); border-radius: 16px; background: rgba(255,255,255,.78); text-align: left; box-shadow: 0 7px 24px rgba(27,67,55,.07); }
+.status-check-summary strong, .status-check-summary span { display: block; }
+.status-check-summary strong { color: var(--green-dark); font-size: 15px; line-height: 1.35; }
+.status-check-summary span { margin-top: 3px; color: var(--muted); font-size: 12px; }
+.status-check-summary.status-pending { border-color: #dba33d; background: #fff8df; }
+.status-check-summary.status-pending strong, .status-check-summary.status-expired strong { color: #8a5a06; }
+.status-check-summary.status-ok { border-color: #65ae83; background: #eef9f2; }
+.status-check-summary.status-help { border-color: #cf5a5f; background: #fff0f0; }
+.status-check-summary.status-help strong { color: var(--red); }
 .dashboard-actions { display: flex; gap: 10px; }
 .button.alert-demo { color: white; background: var(--orange); box-shadow: 0 8px 22px rgba(188,79,38,.2); }
 .metric-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 14px; }
@@ -177,6 +188,12 @@ input:focus, select:focus, textarea:focus { border-color: var(--green); box-shad
 .compact-item:first-child { border-top: 0; }
 .compact-item strong { display: block; margin-bottom: 4px; }
 .compact-item small { color: var(--muted); }
+.task-verification { display: grid; justify-items: end; gap: 5px; }
+.task-confidence { font-size: 10px; font-weight: 850; white-space: nowrap; }
+.task-confidence.confidence-high { color: #238452; }
+.task-confidence.confidence-medium { color: #a36a11; }
+.task-confidence.confidence-low { color: var(--red); }
+.task-confidence.confidence-pending { color: var(--muted); }
 .observed-panel { min-height: 0; }
 .observed-signal-list { margin-top: 20px; display: grid; gap: 10px; }
 .observed-signal-card { min-width: 0; display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 13px; align-items: start; padding: 16px; border: 1px solid #dce8e3; border-radius: 17px; background: linear-gradient(135deg, #fbfdfc, #f5f9f7); }
@@ -265,6 +282,9 @@ dialog::backdrop { background: rgba(17, 34, 29, .56); backdrop-filter: blur(4px)
 .wellness-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 26px; }
 .wellness-actions .button { min-height: 66px; font-size: 20px; }
 .wellness-ok { color: white; background: var(--green); }
+.caregiver-status-dialog { border-color: #2e73a8; }
+.caregiver-status-dialog .caregiver-status-icon { background: #2e73a8; box-shadow: 0 0 0 12px #e3f2ff; }
+.caregiver-status-dialog .eyebrow { color: #2e73a8; }
 .user-danger-dialog { border-color: var(--red); background: #fff3f3; }
 .user-danger-dialog::backdrop { background: rgba(58, 10, 14, .8); }
 .user-danger-dialog .wellness-icon { background: var(--red); box-shadow: 0 0 0 12px var(--red-soft); }
@@ -338,6 +358,7 @@ dialog::backdrop { background: rgba(17, 34, 29, .56); backdrop-filter: blur(4px)
   .footer, .dashboard-head { flex-direction: column; }
   .dashboard-actions { width: 100%; }
   .dashboard-actions .button { flex: 1; }
+  .dashboard-action-stack { width: 100%; justify-items: stretch; }
   .step-list { grid-template-columns: 1fr; }
   .risk-metric { align-items: flex-start; }
   .brand small { display: none; }
@@ -482,6 +503,10 @@ dialog::backdrop { background: rgba(17, 34, 29, .56); backdrop-filter: blur(4px)
   body[data-page="user"] .input-hint { margin: -1px 1px 0; color: #e9fff6; font-size: 12px; text-align: center; }
   body[data-page="user"] > .footer { display: none; }
   body[data-page="user"] .wellness-dialog { width: min(680px, calc(100% - 36px)); border-width: 5px; }
+  body[data-page="user"] .caregiver-status-dialog .wellness-content { padding: 28px 42px; }
+  body[data-page="user"] .caregiver-status-dialog .wellness-icon { width: 70px; height: 70px; margin-bottom: 15px; font-size: 38px; }
+  body[data-page="user"] .caregiver-status-dialog h2 { font-size: 38px; }
+  body[data-page="user"] .caregiver-status-dialog .wellness-actions .button { min-height: 72px; font-size: 22px; }
   body[data-page="user"] .wellness-content { padding: 24px 34px; }
   body[data-page="user"] .wellness-icon { width: 68px; height: 68px; margin-bottom: 14px; font-size: 34px; }
   body[data-page="user"] .wellness-content h2 { font-size: 40px; }
@@ -504,6 +529,10 @@ dialog::backdrop { background: rgba(17, 34, 29, .56); backdrop-filter: blur(4px)
   body[data-page="caregiver"] .dashboard-head .eyebrow { margin-bottom: 2px; }
   body[data-page="caregiver"] .dashboard-actions { width: auto; }
   body[data-page="caregiver"] .dashboard-actions .button { min-height: 40px; padding: 0 14px; font-size: 12px; }
+  body[data-page="caregiver"] .dashboard-action-stack { width: min(330px, 48vw); gap: 7px; }
+  body[data-page="caregiver"] .status-check-summary { padding: 10px 12px; border-radius: 13px; }
+  body[data-page="caregiver"] .status-check-summary strong { font-size: 13px; }
+  body[data-page="caregiver"] .status-check-summary span { font-size: 11px; }
   body[data-page="caregiver"] .metric-grid { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 9px; }
   body[data-page="caregiver"] .metric-card { min-height: 108px; padding: 14px; border-radius: 18px; }
   body[data-page="caregiver"] .risk-metric { min-height: 118px; grid-column: 1 / -1; gap: 15px; }

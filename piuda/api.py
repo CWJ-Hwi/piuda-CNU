@@ -83,6 +83,45 @@ def json_row(row) -> dict | None:
     return dict(row) if row is not None else None
 
 
+def add_task_activity_confidence(database, tasks: list[dict]) -> list[dict]:
+    """Add a caregiver-only activity cross-check without treating it as proof."""
+    enriched = []
+    for task in tasks:
+        item = dict(task)
+        if item["status"] != "completed" or not item.get("completed_at"):
+            item["activity_confidence"] = "pending"
+            item["activity_evidence"] = "완료 기록 후 PIR·CSI 활동을 확인합니다."
+            enriched.append(item)
+            continue
+
+        completed_at = parse_iso(item["completed_at"])
+        window_start = iso(completed_at - timedelta(minutes=30))
+        window_end = iso(completed_at + timedelta(minutes=10))
+        rows = database.execute(
+            """
+            SELECT DISTINCT event_type FROM sensor_events
+            WHERE occurred_at BETWEEN ? AND ?
+              AND event_type IN ('pir_motion','csi_motion','csi_fall')
+            """,
+            (window_start, window_end),
+        ).fetchall()
+        event_types = {row["event_type"] for row in rows}
+        pir_confirmed = "pir_motion" in event_types or "csi_fall" in event_types
+        csi_confirmed = bool(event_types & {"csi_motion", "csi_fall"})
+        if pir_confirmed and csi_confirmed:
+            item["activity_confidence"] = "high"
+            item["activity_evidence"] = "완료 시각 주변 PIR·CSI 활동이 함께 확인됐습니다."
+        elif pir_confirmed or csi_confirmed:
+            item["activity_confidence"] = "medium"
+            sensor_name = "PIR" if pir_confirmed else "CSI"
+            item["activity_evidence"] = f"완료 시각 주변 {sensor_name} 활동만 확인됐습니다."
+        else:
+            item["activity_confidence"] = "low"
+            item["activity_evidence"] = "완료 시각 주변 PIR·CSI 활동 근거가 부족합니다."
+        enriched.append(item)
+    return enriched
+
+
 @api.errorhandler(ValueError)
 def bad_value(error):
     return jsonify({"error": "invalid_request", "message": str(error)}), 400
@@ -167,6 +206,81 @@ def caregiver_alert():
     if created:
         send_kakao_alert(f"[피우다] {alert['title']} · {alert['message']}")
     return jsonify({"ok": True, "created": created, "alert": alert}), 201 if created else 200
+
+
+@api.post("/status-checks")
+@caregiver_required
+def create_status_check():
+    database = get_db()
+    timestamp = iso()
+    active = database.execute(
+        """
+        SELECT * FROM status_checks
+        WHERE responded_at IS NULL AND expires_at > ?
+        ORDER BY requested_at DESC, id DESC LIMIT 1
+        """,
+        (timestamp,),
+    ).fetchone()
+    if active is not None:
+        return jsonify({"ok": True, "created": False, "item": dict(active)})
+
+    expires_at = iso(now() + timedelta(minutes=5))
+    cursor = database.execute(
+        "INSERT INTO status_checks(requested_at, expires_at) VALUES (?, ?)",
+        (timestamp, expires_at),
+    )
+    database.commit()
+    item = database.execute(
+        "SELECT * FROM status_checks WHERE id=?", (cursor.lastrowid,)
+    ).fetchone()
+    return jsonify({"ok": True, "created": True, "item": dict(item)}), 201
+
+
+@api.get("/status-checks/pending")
+def pending_status_check():
+    if not is_private_request():
+        return jsonify({"error": "local_network_only"}), 403
+    item = get_db().execute(
+        """
+        SELECT * FROM status_checks
+        WHERE responded_at IS NULL AND expires_at > ?
+        ORDER BY requested_at DESC, id DESC LIMIT 1
+        """,
+        (iso(),),
+    ).fetchone()
+    return jsonify({"item": json_row(item)})
+
+
+@api.post("/status-checks/<int:status_check_id>/respond")
+def respond_to_status_check(status_check_id: int):
+    if not is_private_request():
+        return jsonify({"error": "local_network_only"}), 403
+    data = payload()
+    response = text_value(data.get("response"), "상태 확인 응답", max_length=16)
+    if response not in {"ok", "help"}:
+        raise ValueError("상태 확인 응답은 ok 또는 help여야 합니다.")
+
+    database = get_db()
+    item = database.execute(
+        "SELECT * FROM status_checks WHERE id=?", (status_check_id,)
+    ).fetchone()
+    if item is None:
+        return jsonify({"error": "not_found"}), 404
+    if item["responded_at"] is not None:
+        return jsonify({"error": "already_responded", "message": "이미 응답한 상태 확인입니다."}), 409
+    if parse_iso(item["expires_at"]) <= now():
+        return jsonify({"error": "expired", "message": "상태 확인 요청 시간이 지났습니다."}), 409
+
+    responded_at = iso()
+    database.execute(
+        "UPDATE status_checks SET response=?, responded_at=? WHERE id=?",
+        (response, responded_at, status_check_id),
+    )
+    database.commit()
+    updated = database.execute(
+        "SELECT * FROM status_checks WHERE id=?", (status_check_id,)
+    ).fetchone()
+    return jsonify({"ok": True, "item": dict(updated)})
 
 
 @api.get("/onboarding")
@@ -525,7 +639,7 @@ def acknowledge_alert(alert_id: int):
 @caregiver_required
 def dashboard():
     database = get_db()
-    tasks = today_tasks()
+    tasks = add_task_activity_confidence(database, today_tasks())
     risk = evaluate_and_notify()
     alerts_rows = database.execute("SELECT * FROM alerts ORDER BY created_at DESC LIMIT 10").fetchall()
     sensor_rows = database.execute(
@@ -536,6 +650,9 @@ def dashboard():
         ORDER BY e.occurred_at DESC LIMIT 20
         """
     ).fetchall()
+    status_check = database.execute(
+        "SELECT * FROM status_checks ORDER BY requested_at DESC, id DESC LIMIT 1"
+    ).fetchone()
     return jsonify(
         {
             "profile": json_row(database.execute("SELECT * FROM profile WHERE id=1").fetchone()),
@@ -543,6 +660,7 @@ def dashboard():
             "risk": risk,
             "alerts": [dict(row) for row in alerts_rows],
             "sensor_events": [dict(row) for row in sensor_rows],
+            "status_check": json_row(status_check),
         }
     )
 

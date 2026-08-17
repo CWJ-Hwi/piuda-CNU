@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS schema_meta (
     value TEXT NOT NULL
 );
 
-INSERT INTO schema_meta(key, value) VALUES ('schema_version', '7')
+INSERT INTO schema_meta(key, value) VALUES ('schema_version', '8')
 ON CONFLICT(key) DO UPDATE SET value = excluded.value;
 
 CREATE TABLE IF NOT EXISTS profile (
@@ -137,6 +137,16 @@ CREATE TABLE IF NOT EXISTS alerts (
 );
 
 CREATE INDEX IF NOT EXISTS idx_alerts_time ON alerts(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS status_checks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    requested_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    response TEXT CHECK (response IN ('ok','help')),
+    responded_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_status_checks_time ON status_checks(requested_at DESC);
 
 CREATE TABLE IF NOT EXISTS feedback_messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

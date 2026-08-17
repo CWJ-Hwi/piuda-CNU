@@ -11,7 +11,7 @@
   <title>피우다 · 오늘의 생활</title>
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/icon-180.png">
-  <link rel="stylesheet" href="/static/app.css?v=33">
+  <link rel="stylesheet" href="/static/app.css?v=35">
 </head>
 <body data-page="user">
   <header class="topbar shell">
@@ -63,6 +63,19 @@
     </section>
   </main>
 
+  <dialog id="caregiverStatusDialog" class="wellness-dialog caregiver-status-dialog" aria-labelledby="caregiverStatusTitle">
+    <div class="wellness-content">
+      <div class="wellness-icon caregiver-status-icon" aria-hidden="true">?</div>
+      <p class="eyebrow">보호자 상태 확인</p>
+      <h2 id="caregiverStatusTitle">보호자가 현재 상태를 확인하고 있습니다.</h2>
+      <p>괜찮으신가요?</p>
+      <div class="wellness-actions">
+        <button class="button wellness-ok" type="button" data-status-check-response="ok">괜찮아요</button>
+        <button class="button alert-demo" type="button" data-status-check-response="help">도움이 필요해요</button>
+      </div>
+    </div>
+  </dialog>
+
   <dialog id="userDangerDialog" class="wellness-dialog user-danger-dialog" aria-labelledby="userDangerTitle">
     <div class="wellness-content">
       <div class="wellness-icon" aria-hidden="true">!</div>
@@ -76,6 +89,6 @@
 
   <footer class="shell footer"><div class="footer-links"><a href="/caregiver">보호자 화면</a><a href="/install">아이폰 설치</a></div></footer>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="/static/app.js?v=33" defer></script>
+  <script src="/static/app.js?v=35" defer></script>
 </body>
 </html>

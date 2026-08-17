@@ -11,7 +11,7 @@
   <title>피우다 · 보호자</title>
   <link rel="manifest" href="/caregiver-manifest.webmanifest">
   <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/icon-180.png">
-  <link rel="stylesheet" href="/static/app.css?v=33">
+  <link rel="stylesheet" href="/static/app.css?v=35">
 </head>
 <body data-page="caregiver">
   <header class="topbar shell">
@@ -35,7 +35,10 @@
     <div id="dashboard" class="dashboard hidden">
       <section class="dashboard-head">
         <div><p class="eyebrow" id="careDate">오늘의 돌봄 현황</p><h1><span id="careUserName">사용자</span>님의 하루</h1><p>마지막 갱신 <span id="lastRefresh">-</span></p></div>
-        <div class="dashboard-actions"><button id="refreshButton" class="button secondary">새로고침</button></div>
+        <div class="dashboard-action-stack">
+          <div class="dashboard-actions"><button id="requestUserCheckButton" class="button primary">사용자 호출</button><button id="refreshButton" class="button secondary">새로고침</button></div>
+          <div id="statusCheckSummary" class="status-check-summary" aria-live="polite"><strong>상태 확인 결과: 아직 요청 없음</strong><span>사용자를 호출하면 결과가 표시됩니다.</span></div>
+        </div>
       </section>
 
       <section class="metric-grid">
@@ -124,6 +127,6 @@
   </dialog>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="/static/app.js?v=33" defer></script>
+  <script src="/static/app.js?v=35" defer></script>
 </body>
 </html>

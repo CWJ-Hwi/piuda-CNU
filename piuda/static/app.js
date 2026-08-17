@@ -24,7 +24,9 @@ const state = {
   userTaskSnapshot: null,
   taskUndoUntil: new Map(),
   taskRemovalTimers: new Map(),
-  userDangerActivation: ""
+  userDangerActivation: "",
+  pendingStatusCheckId: null,
+  statusCheckResponding: false
 };
 let installPromptEvent = null;
 const $ = selector => document.querySelector(selector);
@@ -188,6 +190,7 @@ async function initUser() {
   $("#ttsToggle").addEventListener("click", toggleTts);
   $("#replayButton").addEventListener("click", () => speak(state.lastReply, true));
   $("#caregiverAlertButton").addEventListener("click", sendCaregiverAlert);
+  $("#caregiverStatusDialog").addEventListener("click", respondToCaregiverStatusCheck);
   $("#userDangerAcknowledge").addEventListener("click", () => $("#userDangerDialog").close());
   updateTtsControls();
   setupVoiceInput();
@@ -281,11 +284,17 @@ async function refreshUserSnapshot(showError = false) {
   if (state.userRefreshing) return;
   state.userRefreshing = true;
   try {
-    const [profile, tasks, risk] = await Promise.all([api("/profile"), api("/tasks/today"), api("/risk/current")]);
+    const [profile, tasks, risk, statusCheck] = await Promise.all([
+      api("/profile"),
+      api("/tasks/today"),
+      api("/risk/current"),
+      api("/status-checks/pending")
+    ]);
     state.userName = profile.user_name || "사용자";
     $("#userName").textContent = state.userName;
     renderUserTasks(tasks);
     renderUserRisk(risk);
+    syncCaregiverStatusCheck(statusCheck.item);
   } catch (error) {
     if (showError) {
       $("#taskList").innerHTML = '<div class="empty-state">Pi 서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.</div>';
@@ -362,9 +371,53 @@ function syncUserDangerPrompt(risk) {
     return;
   }
   if (state.userDangerActivation === risk.assessed_at) return;
+  if ($("#caregiverStatusDialog")?.open) return;
   state.userDangerActivation = risk.assessed_at;
   if (!dialog.open) dialog.showModal();
   speak("위험 상태입니다. 장시간 생활 신호가 없어 보호자에게 알림을 보냈습니다.");
+}
+
+function syncCaregiverStatusCheck(item) {
+  const dialog = $("#caregiverStatusDialog");
+  if (!dialog || state.statusCheckResponding) return;
+  if (!item) {
+    state.pendingStatusCheckId = null;
+    if (dialog.open) dialog.close();
+    return;
+  }
+  if ($("#userDangerDialog")?.open) return;
+  if (state.pendingStatusCheckId === item.id && dialog.open) return;
+  state.pendingStatusCheckId = item.id;
+  if (!dialog.open) dialog.showModal();
+  speak("보호자가 현재 상태를 확인하고 있습니다. 괜찮으신가요?");
+}
+
+async function respondToCaregiverStatusCheck(event) {
+  const button = event.target.closest("[data-status-check-response]");
+  if (!button || state.statusCheckResponding || !state.pendingStatusCheckId) return;
+  const response = button.dataset.statusCheckResponse;
+  const buttons = $$('[data-status-check-response]');
+  state.statusCheckResponding = true;
+  buttons.forEach(item => { item.disabled = true; });
+  try {
+    await api(`/status-checks/${state.pendingStatusCheckId}/respond`, { method: "POST", body: { response } });
+    $("#caregiverStatusDialog").close();
+    state.pendingStatusCheckId = null;
+    const message = response === "ok"
+      ? "보호자에게 괜찮다고 알렸어요."
+      : "보호자에게 도움이 필요하다고 알렸어요.";
+    toast(message);
+    speak(message);
+  } catch (error) {
+    toast(error.message);
+    if ([404, 409].includes(error.status)) {
+      $("#caregiverStatusDialog").close();
+      state.pendingStatusCheckId = null;
+    }
+  } finally {
+    state.statusCheckResponding = false;
+    buttons.forEach(item => { item.disabled = false; });
+  }
 }
 
 async function sendCaregiverAlert() {
@@ -516,6 +569,7 @@ async function initCaregiver() {
   $("#authForm").addEventListener("submit", submitAuth);
   $("#logoutButton").addEventListener("click", logout);
   $("#refreshButton").addEventListener("click", loadDashboard);
+  $("#requestUserCheckButton").addEventListener("click", requestUserStatusCheck);
   $("#localAlertAcknowledge").addEventListener("click", acknowledgeLocalAlert);
   $("#routineForm").addEventListener("submit", submitRoutine);
   $("#profileForm").addEventListener("submit", submitProfile);
@@ -611,6 +665,7 @@ async function loadDashboard() {
     renderProfileSummary(state.profile);
     renderCareTasks(result.tasks);
     renderAlerts(result.alerts);
+    renderStatusCheck(result.status_check);
     state.sensorEvents = result.sensor_events || [];
     renderEvents(state.sensorEvents);
     renderObservedSignals();
@@ -626,6 +681,61 @@ async function loadDashboard() {
   } finally {
     state.caregiverRefreshing = false;
   }
+}
+
+async function requestUserStatusCheck() {
+  const button = $("#requestUserCheckButton");
+  if (!button || button.disabled) return;
+  button.disabled = true;
+  button.textContent = "호출 중…";
+  try {
+    const result = await api("/status-checks", { method: "POST", body: {} });
+    renderStatusCheck(result.item);
+    toast(result.created ? "사용자 화면에 상태 확인을 요청했어요." : "사용자의 응답을 기다리고 있어요.");
+  } catch (error) {
+    toast(error.message);
+    button.disabled = false;
+    button.textContent = "사용자 호출";
+  }
+}
+
+function renderStatusCheck(item) {
+  const summary = $("#statusCheckSummary");
+  const button = $("#requestUserCheckButton");
+  if (!summary || !button) return;
+  summary.className = "status-check-summary";
+  if (!item) {
+    summary.innerHTML = "<strong>상태 확인 결과: 아직 요청 없음</strong><span>사용자를 호출하면 결과가 표시됩니다.</span>";
+    button.disabled = false;
+    button.textContent = "사용자 호출";
+    return;
+  }
+
+  if (item.responded_at && item.response === "ok") {
+    summary.classList.add("status-ok");
+    summary.innerHTML = `<strong>상태 확인 결과: 괜찮음</strong><span>확인 시간: ${escapeHTML(timeOnly(item.responded_at))}</span>`;
+    button.disabled = false;
+    button.textContent = "다시 호출";
+    return;
+  }
+  if (item.responded_at && item.response === "help") {
+    summary.classList.add("status-help");
+    summary.innerHTML = `<strong>상태 확인 결과: 도움이 필요함</strong><span>확인 시간: ${escapeHTML(timeOnly(item.responded_at))}</span>`;
+    button.disabled = false;
+    button.textContent = "다시 호출";
+    return;
+  }
+  if (new Date(item.expires_at).valueOf() <= Date.now()) {
+    summary.classList.add("status-expired");
+    summary.innerHTML = `<strong>상태 확인 결과: 응답 없음</strong><span>요청 시간: ${escapeHTML(timeOnly(item.requested_at))}</span>`;
+    button.disabled = false;
+    button.textContent = "다시 호출";
+    return;
+  }
+  summary.classList.add("status-pending");
+  summary.innerHTML = `<strong>상태 확인 결과: 응답 대기 중</strong><span>요청 시간: ${escapeHTML(timeOnly(item.requested_at))}</span>`;
+  button.disabled = true;
+  button.textContent = "응답 기다리는 중";
 }
 
 async function refreshSensors() {
@@ -858,7 +968,11 @@ function renderCareTasks(tasks) {
   const completed = tasks.filter(item => item.status === "completed").length;
   $("#completionMetric").textContent = `${completed} / ${tasks.length}`;
   $("#completionText").textContent = tasks.length ? `${Math.round(completed / tasks.length * 100)}% 완료` : "등록된 일정 없음";
-  $("#careTaskList").innerHTML = tasks.length ? tasks.map(item => `<div class="compact-item"><div><strong>${escapeHTML(item.scheduled_time)} · ${escapeHTML(item.title)}</strong><small>${escapeHTML(item.instructions || item.category)}</small></div><span class="pill ${item.status}">${({pending:"예정",completed:"완료",missed:"미수행",skipped:"건너뜀"})[item.status]}</span></div>`).join("") : '<div class="empty-state">오늘 일정이 없습니다.</div>';
+  const confidenceLabels = { high: "신뢰도 높음", medium: "신뢰도 보통", low: "신뢰도 낮음", pending: "완료 후 검증" };
+  $("#careTaskList").innerHTML = tasks.length ? tasks.map(item => {
+    const confidence = item.activity_confidence || "pending";
+    return `<div class="compact-item"><div><strong>${escapeHTML(item.scheduled_time)} · ${escapeHTML(item.title)}</strong><small>${escapeHTML(item.instructions || item.category)}</small></div><div class="task-verification"><span class="pill ${item.status}">${({pending:"예정",completed:"완료",missed:"미수행",skipped:"건너뜀"})[item.status]}</span><small class="task-confidence confidence-${escapeHTML(confidence)}" title="${escapeHTML(item.activity_evidence || "PIR·CSI 활동 교차확인 결과")}">${escapeHTML(confidenceLabels[confidence] || "확인 대기")}</small></div></div>`;
+  }).join("") : '<div class="empty-state">오늘 일정이 없습니다.</div>';
 }
 
 function profileIdentity(profile) {
