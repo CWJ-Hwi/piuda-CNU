@@ -94,6 +94,11 @@ def test_strong_csi_change_requires_pir_and_creates_fall_candidate(
     assert falls[0]["confidence"] >= 0.65
     assert '"pir_correlated":true' in falls[0]["payload_json"]
 
+    summary = client.get("/api/v1/sensors", headers=auth_headers).get_json()["items"][0]
+    assert summary["last_pir_motion_at"]
+    assert summary["last_csi_fall_at"]
+    assert summary["last_csi_fall_confidence"] >= 0.65
+
 
 def test_module_reading_validates_auth_and_payload(client, auth_headers):
     sensor = register_sensor(client, auth_headers)

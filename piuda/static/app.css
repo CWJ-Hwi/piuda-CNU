@@ -177,6 +177,27 @@ input:focus, select:focus, textarea:focus { border-color: var(--green); box-shad
 .compact-item:first-child { border-top: 0; }
 .compact-item strong { display: block; margin-bottom: 4px; }
 .compact-item small { color: var(--muted); }
+.observed-panel { min-height: 0; }
+.observed-signal-list { margin-top: 20px; display: grid; gap: 10px; }
+.observed-signal-card { min-width: 0; display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 13px; align-items: start; padding: 16px; border: 1px solid #dce8e3; border-radius: 17px; background: linear-gradient(135deg, #fbfdfc, #f5f9f7); }
+.observed-signal-icon { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 14px; color: #4c8cc4; background: #e8f2fb; }
+.observed-signal-icon svg { width: 28px; height: 28px; }
+.observed-signal-card.activity .observed-signal-icon { color: #dfa02e; background: #fff3d8; }
+.observed-signal-copy { min-width: 0; }
+.observed-signal-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.observed-signal-title h3 { margin: 0; font-size: 18px; letter-spacing: -.025em; }
+.observed-signal-status { flex: 0 0 auto; font-size: 13px; font-weight: 900; }
+.observed-signal-status.positive { color: #23985d; }
+.observed-signal-status.caution { color: #b87513; }
+.observed-signal-status.danger { color: var(--red); }
+.observed-signal-status.neutral { color: var(--muted); }
+.observed-signal-primary { margin: 10px 0 0; color: #465951; font-size: 14px; line-height: 1.4; }
+.observed-signal-primary strong { color: var(--green); }
+.observed-signal-detail { margin: 5px 0 0; color: #4f6059; font-size: 13px; line-height: 1.45; }
+.observed-signal-meta { margin: 7px 0 0; color: var(--muted); font-size: 11px; line-height: 1.4; }
+.risk-factor-block { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.risk-factor-title { margin: 0; color: var(--muted); font-size: 11px; font-weight: 850; }
+.risk-factor-block .factor-list { margin-top: 10px; }
 .sensor-module-grid { margin-top: 20px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .sensor-module-card { min-width: 0; padding: 17px; border: 1px solid #cfe0d8; border-radius: 18px; background: #f7faf8; }
 .sensor-module-card.needs-check { border-color: #efb39c; background: #fff7f2; }

@@ -40,17 +40,17 @@ def test_pwa_assets_have_install_metadata(client):
     assert service_worker.headers["Cache-Control"] == "no-cache"
     assert "api/" in service_worker.get_data(as_text=True)
     worker_script = service_worker.get_data(as_text=True)
-    assert 'const CACHE = "piuda-v31"' in worker_script
-    assert '"/static/app.css?v=31"' in worker_script
-    assert '"/static/app.js?v=31"' in worker_script
+    assert 'const CACHE = "piuda-v33"' in worker_script
+    assert '"/static/app.css?v=33"' in worker_script
+    assert '"/static/app.js?v=33"' in worker_script
     for page in ("/", "/caregiver", "/install"):
         html = client.get(page).get_data(as_text=True)
-        assert '/static/app.css?v=31' in html
-        assert '/static/app.js?v=31' in html
+        assert '/static/app.css?v=33' in html
+        assert '/static/app.js?v=33' in html
     demo_template = Path(client.application.root_path, "templates/demo.html").read_text(encoding="utf-8")
-    assert '/static/app.css?v=31' in demo_template
-    assert '/static/app.js?v=31' in demo_template
-    assert '/static/app.css?v=31' in client.get("/static/offline.html").get_data(as_text=True)
+    assert '/static/app.css?v=33' in demo_template
+    assert '/static/app.js?v=33' in demo_template
+    assert '/static/app.css?v=33' in client.get("/static/offline.html").get_data(as_text=True)
     assert 'url.pathname === "/caregiver"' in worker_script
     assert 'fetch(event.request, { cache: "no-store" })' in worker_script
     assert '"/caregiver",' not in worker_script
@@ -73,6 +73,11 @@ def test_caregiver_shows_live_peak_delta_instead_of_wifi_strength(client):
     caregiver = client.get("/caregiver").get_data(as_text=True)
     script = client.get("/static/app.js").get_data(as_text=True)
 
+    assert 'id="observedSignals"' in caregiver
+    assert "생활 공간 점유" in script
+    assert "활동 이상 감지" in script
+    assert "last_pir_motion_at" in script
+    assert "last_csi_fall_at" in script
     assert "Peak Delta" in caregiver
     assert "Peak Delta · LIVE" in script
     assert "Wi-Fi 세기" not in script

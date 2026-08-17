@@ -18,6 +18,8 @@ const state = {
   alertAudioContext: null,
   userName: "사용자",
   profile: {},
+  sensors: [],
+  sensorEvents: [],
   conversation: [],
   userTaskSnapshot: null,
   taskUndoUntil: new Map(),
@@ -84,6 +86,28 @@ function shortDateTime(value) {
   if (!value) return "-";
   const date = new Date(value);
   return Number.isNaN(date.valueOf()) ? value : date.toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function relativeTime(value) {
+  if (!value) return "기록 없음";
+  const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) return "기록 없음";
+  const seconds = Math.max(0, Math.floor((Date.now() - date.valueOf()) / 1000));
+  if (seconds < 60) return "방금 전";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}분 전`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}시간 전`;
+  return `${Math.floor(hours / 24)}일 전`;
+}
+
+function newestByTime(items, field) {
+  return items.reduce((newest, item) => {
+    const current = item?.[field] ? new Date(item[field]) : null;
+    if (!current || Number.isNaN(current.valueOf())) return newest;
+    if (!newest || current > newest.date) return { item, date: current };
+    return newest;
+  }, null);
 }
 
 async function checkConnection() {
@@ -587,7 +611,9 @@ async function loadDashboard() {
     renderProfileSummary(state.profile);
     renderCareTasks(result.tasks);
     renderAlerts(result.alerts);
-    renderEvents(result.sensor_events);
+    state.sensorEvents = result.sensor_events || [];
+    renderEvents(state.sensorEvents);
+    renderObservedSignals();
     notifyNewCaregiverAlert(result.alerts);
     await refreshSensors();
   } catch (error) {
@@ -607,7 +633,9 @@ async function refreshSensors() {
   state.sensorRefreshing = true;
   try {
     const sensors = await api("/sensors");
-    renderSensors(sensors.items);
+    state.sensors = sensors.items || [];
+    renderSensors(state.sensors);
+    renderObservedSignals();
   } catch {
     // 인증 만료와 연결 오류는 2초 주기의 전체 대시보드 갱신에서 한 번만 처리합니다.
   } finally {
@@ -693,6 +721,137 @@ function renderCareRisk(risk) {
   $("#careRiskText").textContent = caregiverRiskSentence(risk);
   $("#riskRing").style.setProperty("--risk-angle", `${risk.score * 3.6}deg`);
   $("#riskFactors").innerHTML = risk.factors.length ? risk.factors.map(item => `<div class="factor-item"><div>${escapeHTML(item.label)}<br><span>${escapeHTML(item.evidence || "기록된 세부 정보 없음")}</span></div><strong>-${item.points}</strong></div>`).join("") : '<div class="empty-state">현재 확인된 위험 요인이 없습니다.</div>';
+}
+
+function renderObservedSignals() {
+  const container = $("#observedSignals");
+  if (!container) return;
+
+  const sensors = state.sensors || [];
+  const events = state.sensorEvents || [];
+  const nowValue = Date.now();
+  const isOnline = item => {
+    const value = item.received_at || item.last_seen_at;
+    const date = value ? new Date(value) : null;
+    return Boolean(date && !Number.isNaN(date.valueOf()) && nowValue - date.valueOf() < 30 * 60 * 1000);
+  };
+  const online = sensors.filter(isOnline);
+  const activePIR = online.filter(item => Number(item.pir_state) === 1);
+  const latestSensorMotion = newestByTime(sensors, "last_pir_motion_at");
+  const latestEventMotion = newestByTime(events.filter(item => item.event_type === "pir_motion"), "occurred_at");
+  const latestMotion = [latestSensorMotion, latestEventMotion].filter(Boolean).sort((a, b) => b.date - a.date)[0] || null;
+  const motionAge = latestMotion ? nowValue - latestMotion.date.valueOf() : Infinity;
+  const recentlyActive = motionAge <= 10 * 60 * 1000;
+  const latestLocation = latestMotion?.item?.location || latestMotion?.item?.device_name || "생활 공간";
+  const locationStates = new Map();
+  online.forEach(item => {
+    const location = item.location || item.name || "생활 공간";
+    const itemMotion = item.last_pir_motion_at ? new Date(item.last_pir_motion_at) : null;
+    const itemRecentlyActive = itemMotion && !Number.isNaN(itemMotion.valueOf()) && nowValue - itemMotion.valueOf() <= 10 * 60 * 1000;
+    const status = Number(item.pir_state) === 1 ? "재실" : itemRecentlyActive ? "재실 가능" : "미감지";
+    const previous = locationStates.get(location);
+    if (!previous || status === "재실" || (status === "재실 가능" && previous === "미감지")) locationStates.set(location, status);
+  });
+  if (recentlyActive && !locationStates.has(latestLocation)) locationStates.set(latestLocation, "재실 가능");
+  if (recentlyActive && locationStates.get(latestLocation) === "미감지") locationStates.set(latestLocation, "재실 가능");
+  const locationSummary = [...locationStates].map(([location, status]) => `${location}: ${status}`).join(" / ");
+  const irReading = online.find(item => item.has_ir_sensor && item.object_c != null);
+
+  let occupancyStatus = "확인 대기";
+  let occupancyTone = "neutral";
+  let occupancyText = sensors.length ? "센서 신호를 기다리는 중" : "등록된 센서 없음";
+  if (activePIR.length) {
+    occupancyStatus = "재실";
+    occupancyTone = "positive";
+    occupancyText = locationSummary || "생활 공간: 재실";
+  } else if (recentlyActive) {
+    occupancyStatus = "재실 가능";
+    occupancyTone = "positive";
+    occupancyText = locationSummary || `${latestLocation}: 재실 가능`;
+  } else if (online.length) {
+    occupancyStatus = "미감지";
+    occupancyTone = "caution";
+    occupancyText = locationSummary || "생활 공간: 현재 움직임 없음";
+  } else if (sensors.length) {
+    occupancyStatus = "센서 점검";
+    occupancyTone = "danger";
+    occupancyText = "30분 이상 최신 센서 신호 없음";
+  }
+  const occupancyDetail = latestMotion
+    ? `최근 ${latestLocation} 움직임: ${relativeTime(latestMotion.date)}`
+    : "최근 움직임 기록이 없습니다.";
+  const occupancyMeta = irReading
+    ? `PIR 감지 · IR 표면 참고값 ${Number(irReading.object_c).toFixed(1)}℃`
+    : "PIR 감지 · IR 센서값 대기";
+
+  const latestSensorFall = newestByTime(sensors, "last_csi_fall_at");
+  const latestEventFall = newestByTime(events.filter(item => item.event_type === "csi_fall"), "occurred_at");
+  const latestFall = [latestSensorFall, latestEventFall].filter(Boolean).sort((a, b) => b.date - a.date)[0] || null;
+  const fallAge = latestFall ? nowValue - latestFall.date.valueOf() : Infinity;
+  const fallConfidence = Number(latestFall?.item?.last_csi_fall_confidence ?? latestFall?.item?.confidence ?? 0);
+  const strongChanges = online.filter(item => item.csi_status === "strong_change");
+  const correlatedChange = strongChanges.some(item => Number(item.pir_state) === 1);
+  const recentHeartbeat = events.some(item => item.event_type === "heartbeat" && nowValue - new Date(item.occurred_at).valueOf() < 30 * 60 * 1000);
+  const csiAvailable = online.some(item => Number(item.csi_packet_rate) > 0 || ["calibrating", "stable", "motion", "strong_change"].includes(item.csi_status)) || recentHeartbeat;
+  const peakDelta = strongChanges.length ? Math.max(...strongChanges.map(item => Number(item.csi_peak_delta || 0))) : 0;
+
+  let activityStatus = "낮음";
+  let activityTone = "positive";
+  let activityText = "낙상 위험: 낮음";
+  let activityDetail = "최근 24시간 낙상 의심 이벤트 없음";
+  if (!online.length) {
+    activityStatus = sensors.length ? "센서 점검" : "확인 대기";
+    activityTone = sensors.length ? "danger" : "neutral";
+    activityText = sensors.length ? "활동 이상 판단 중단" : "센서 연결 후 판단 가능";
+    activityDetail = "최신 CSI 센서 신호가 없습니다.";
+  } else if (latestFall && fallAge <= 30 * 60 * 1000) {
+    activityStatus = "확인 필요";
+    activityTone = "danger";
+    activityText = "낙상 의심: 높음";
+    activityDetail = `CSI·PIR 동시 변화: ${relativeTime(latestFall.date)}${fallConfidence ? ` · 신뢰도 ${Math.round(fallConfidence * 100)}%` : ""}`;
+  } else if (correlatedChange) {
+    activityStatus = "확인 필요";
+    activityTone = "danger";
+    activityText = "낙상 의심 변화 감지";
+    activityDetail = `CSI 강한 변화 · Peak Delta ${peakDelta.toFixed(2)}`;
+  } else if (strongChanges.length) {
+    activityStatus = "관찰 필요";
+    activityTone = "caution";
+    activityText = "CSI 변화 감지";
+    activityDetail = `PIR 동시 감지 없음 · Peak Delta ${peakDelta.toFixed(2)}`;
+  } else if (latestFall && fallAge <= 24 * 60 * 60 * 1000) {
+    activityStatus = "이력 있음";
+    activityTone = "caution";
+    activityText = "최근 낙상 의심 이력";
+    activityDetail = `마지막 의심 이벤트: ${relativeTime(latestFall.date)}`;
+  } else if (!csiAvailable) {
+    activityStatus = "확인 대기";
+    activityTone = "neutral";
+    activityText = "CSI 기준 신호 확인 중";
+    activityDetail = "CSI 데이터가 수신되면 자동으로 갱신됩니다.";
+  }
+
+  const personIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="4" fill="currentColor"></circle><path d="M4 21a8 8 0 0 1 16 0z" fill="currentColor"></path></svg>';
+  const shieldIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 20 5v6c0 5.2-3.4 9.1-8 11-4.6-1.9-8-5.8-8-11V5z" fill="currentColor"></path><path d="M12 7v6m0 4h.01" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round"></path></svg>';
+  container.innerHTML = `
+    <article class="observed-signal-card occupancy">
+      <div class="observed-signal-icon">${personIcon}</div>
+      <div class="observed-signal-copy">
+        <div class="observed-signal-title"><h3>생활 공간 점유</h3><span class="observed-signal-status ${occupancyTone}">${escapeHTML(occupancyStatus)}</span></div>
+        <p class="observed-signal-primary">${escapeHTML(occupancyText)}</p>
+        <p class="observed-signal-detail">${escapeHTML(occupancyDetail)}</p>
+        <p class="observed-signal-meta">${escapeHTML(occupancyMeta)}</p>
+      </div>
+    </article>
+    <article class="observed-signal-card activity">
+      <div class="observed-signal-icon">${shieldIcon}</div>
+      <div class="observed-signal-copy">
+        <div class="observed-signal-title"><h3>활동 이상 감지</h3><span class="observed-signal-status ${activityTone}">${escapeHTML(activityStatus)}</span></div>
+        <p class="observed-signal-primary">${escapeHTML(activityText)}</p>
+        <p class="observed-signal-detail">${escapeHTML(activityDetail)}</p>
+        <p class="observed-signal-meta">CSI 변화와 PIR 동시 감지를 함께 확인합니다.</p>
+      </div>
+    </article>`;
 }
 
 function renderCareTasks(tasks) {

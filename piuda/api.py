@@ -556,7 +556,22 @@ def sensors():
                s.has_ir_sensor, s.ambient_c, s.object_c, s.pir_state, s.reason,
                s.csi_packet_count, s.csi_packet_rate, s.csi_rssi, s.csi_length,
                s.csi_mean_amplitude, s.csi_amplitude_stddev, s.csi_peak_delta,
-               s.csi_dropped_count, s.csi_score, s.csi_status, s.received_at
+               s.csi_dropped_count, s.csi_score, s.csi_status, s.received_at,
+               (
+                 SELECT e.occurred_at FROM sensor_events e
+                 WHERE e.device_id=d.id AND e.event_type='pir_motion'
+                 ORDER BY e.occurred_at DESC, e.id DESC LIMIT 1
+               ) AS last_pir_motion_at,
+               (
+                 SELECT e.occurred_at FROM sensor_events e
+                 WHERE e.device_id=d.id AND e.event_type='csi_fall'
+                 ORDER BY e.occurred_at DESC, e.id DESC LIMIT 1
+               ) AS last_csi_fall_at,
+               (
+                 SELECT e.confidence FROM sensor_events e
+                 WHERE e.device_id=d.id AND e.event_type='csi_fall'
+                 ORDER BY e.occurred_at DESC, e.id DESC LIMIT 1
+               ) AS last_csi_fall_confidence
         FROM sensor_devices d
         LEFT JOIN sensor_module_state s ON s.device_id=d.id
         ORDER BY d.name
